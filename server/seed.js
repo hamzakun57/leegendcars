@@ -1,0 +1,72 @@
+/**
+ * Remplit la table `vehicles` à partir de la flotte déclarée dans assets/js/data.js.
+ *
+ *   npm run seed             -> n'ajoute que les véhicules absents (les modifications
+ *                               faites dans l'admin sont donc préservées)
+ *   npm run seed -- --force  -> réimporte toute la flotte et écrase l'existant
+ */
+import vm from "node:vm";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { getVehicle, insertVehicle, listVehicles, updateVehicle } from "./db.js";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const force = process.argv.includes("--force");
+
+/* data.js est un IIFE navigateur qui écrit sur `window` : on l'évalue dans un
+   contexte isolé pour récupérer DATA sans modifier le fichier. */
+function loadFleet() {
+  const src = readFileSync(join(here, "..", "assets", "js", "data.js"), "utf8");
+  const ctx = vm.createContext({ window: {} });
+  vm.runInContext(src, ctx, { filename: "data.js" });
+  if (!ctx.window.DATA || !Array.isArray(ctx.window.DATA.VEHICLES)) {
+    throw new Error("VEHICLES introuvable dans assets/js/data.js");
+  }
+  return ctx.window.DATA.VEHICLES;
+}
+
+const toRow = (v, i) => ({
+  slug: v.slug,
+  name: v.name,
+  tagline: v.tagline,
+  transmission: v.transmission,
+  fuel: v.fuel,
+  doors: v.doors,
+  seats: v.seats,
+  price_from: v.priceFrom,
+  deposit: v.deposit ?? 0,
+  approx: v.approx,
+  badge: v.badge,
+  accent: v.accent,
+  description: v.description,
+  ideal_for: v.idealFor,
+  gallery: v.gallery,
+  tiers: v.tiers,
+  active: true,
+  sort_order: i,
+});
+
+const fleet = loadFleet();
+let added = 0;
+let updated = 0;
+let skipped = 0;
+
+for (const [i, v] of fleet.entries()) {
+  const existing = getVehicle(v.slug);
+  if (!existing) {
+    insertVehicle(toRow(v, i));
+    added++;
+  } else if (force) {
+    updateVehicle(v.slug, toRow(v, i));
+    updated++;
+  } else {
+    skipped++;
+  }
+}
+
+console.log(
+  `Flotte : ${added} ajouté(s), ${updated} mis à jour${skipped ? `, ${skipped} ignoré(s)` : ""}. ` +
+    `Total en base : ${listVehicles().length}.`
+);

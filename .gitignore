@@ -1,0 +1,36 @@
+# Dépendances installées par npm
+node_modules/
+
+# -----------------------------------------------------------------------------
+# Données de l'application — NE JAMAIS versionner.
+# La base SQLite contient les réservations, les fiches clients (noms, CIN,
+# passeports) et l'empreinte du mot de passe administrateur.
+# Le dossier uploads/ contient les photos d'identités et les pièces jointes.
+server/data/
+uploads/
+
+# Secrets d'environnement
+.env
+.env.*
+!.env.example
+
+# Modèles de contrat fournis : documents officiels contenant des données
+# personnelles réelles. À conserver hors dépôt.
+model_contrat.pdf
+NEW_MODEL.pdf
+
+# Fichiers de travail personnels
+info_*.txt
+*.jfif
+
+# Systèmes et éditeurs
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+*.swp
+
+# Journaux
+*.log
+npm-debug.log*
