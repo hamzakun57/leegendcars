@@ -106,7 +106,6 @@ function head(r) {
     </div>
     <div class="fv-head__mid">
       ${logoSvg()}
-      <div style="font-weight:700;letter-spacing:.06em">${esc(COMPANY.legalName)}</div>
     </div>
     <div class="fv-head__right">
       <div>Tél: ${esc(COMPANY.phone)}</div>
