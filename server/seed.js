@@ -11,6 +11,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { getVehicle, insertVehicle, listVehicles, updateVehicle } from "./db.js";
+import { closeDb } from "./pg.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const force = process.argv.includes("--force");
@@ -56,31 +57,32 @@ const fleet = loadFleet();
  * hébergeur au disque éphémère comme Render gratuit) : sans cela, le site
  * afficherait un catalogue vide.
  */
-export function seedFleet({ force = false } = {}) {
+export async function seedFleet({ force = false } = {}) {
   let added = 0;
   let updated = 0;
   let skipped = 0;
 
   for (const [i, v] of fleet.entries()) {
-    const existing = getVehicle(v.slug);
+    const existing = await getVehicle(v.slug);
     if (!existing) {
-      insertVehicle(toRow(v, i));
+      await insertVehicle(toRow(v, i));
       added++;
     } else if (force) {
-      updateVehicle(v.slug, toRow(v, i));
+      await updateVehicle(v.slug, toRow(v, i));
       updated++;
     } else {
       skipped++;
     }
   }
-  return { added, updated, skipped, total: listVehicles().length };
+  return { added, updated, skipped, total: (await listVehicles()).length };
 }
 
 /* Exécution directe : npm run seed [-- --force] */
 if (process.argv[1] && process.argv[1].endsWith("seed.js")) {
-  const r = seedFleet({ force: force || undefined });
+  const r = await seedFleet({ force });
   console.log(
     `Flotte : ${r.added} ajouté(s), ${r.updated} mis à jour${r.skipped ? `, ${r.skipped} ignoré(s)` : ""}. ` +
       `Total en base : ${r.total}.`
   );
+  await closeDb();
 }

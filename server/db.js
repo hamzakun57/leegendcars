@@ -1,94 +1,10 @@
-import { DatabaseSync } from "node:sqlite";
 import { randomBytes } from "node:crypto";
-import { mkdirSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 
-const here = dirname(fileURLToPath(import.meta.url));
-const DB_PATH = process.env.DB_PATH || join(here, "data", "leegend.db");
+import { many, one, query, tx } from "./pg.js";
 
-mkdirSync(dirname(DB_PATH), { recursive: true });
-
-export const db = new DatabaseSync(DB_PATH);
-
-db.exec("PRAGMA journal_mode = WAL");
-db.exec("PRAGMA foreign_keys = ON");
-
-db.exec(`
-CREATE TABLE IF NOT EXISTS users (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  username      TEXT NOT NULL UNIQUE,
-  password_hash TEXT NOT NULL,
-  created_at    TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS vehicles (
-  slug         TEXT PRIMARY KEY,
-  name         TEXT NOT NULL,
-  tagline      TEXT DEFAULT '',
-  transmission TEXT DEFAULT '',
-  fuel         TEXT DEFAULT '',
-  doors        INTEGER DEFAULT 5,
-  seats        INTEGER DEFAULT 5,
-  price_from   INTEGER NOT NULL DEFAULT 0,
-  deposit      INTEGER NOT NULL DEFAULT 0,
-  approx       INTEGER DEFAULT 0,
-  badge        TEXT DEFAULT '',
-  accent       TEXT DEFAULT '',
-  description  TEXT DEFAULT '[]',
-  ideal_for    TEXT DEFAULT '[]',
-  gallery      TEXT DEFAULT '[]',
-  tiers        TEXT DEFAULT '[]',
-  active       INTEGER NOT NULL DEFAULT 1,
-  sort_order   INTEGER NOT NULL DEFAULT 0,
-  created_at   TEXT NOT NULL,
-  updated_at   TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS blocked_dates (
-  id           INTEGER PRIMARY KEY AUTOINCREMENT,
-  vehicle_slug TEXT NOT NULL REFERENCES vehicles(slug) ON DELETE CASCADE,
-  start_date   TEXT NOT NULL,
-  end_date     TEXT NOT NULL,
-  reason       TEXT DEFAULT '',
-  created_at   TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS reservations (
-  id            INTEGER PRIMARY KEY AUTOINCREMENT,
-  ref           TEXT NOT NULL UNIQUE,
-  status        TEXT NOT NULL DEFAULT 'nouvelle',
-  vehicle_slug  TEXT DEFAULT '',
-  vehicle_name  TEXT DEFAULT '',
-  first_name    TEXT DEFAULT '',
-  last_name     TEXT DEFAULT '',
-  country_code  TEXT DEFAULT '',
-  phone         TEXT DEFAULT '',
-  licence_number TEXT DEFAULT '',
-  licence_date  TEXT DEFAULT '',
-  passport      TEXT DEFAULT '',
-  pickup        TEXT DEFAULT '',
-  ret           TEXT DEFAULT '',
-  pickup_date   TEXT DEFAULT '',
-  pickup_time   TEXT DEFAULT '',
-  return_date   TEXT DEFAULT '',
-  return_time   TEXT DEFAULT '',
-  baby_seat     INTEGER NOT NULL DEFAULT 0,
-  one_way       INTEGER NOT NULL DEFAULT 0,
-  days          INTEGER NOT NULL DEFAULT 0,
-  daily         INTEGER NOT NULL DEFAULT 0,
-  seat_total    INTEGER NOT NULL DEFAULT 0,
-  total         INTEGER NOT NULL DEFAULT 0,
-  notes         TEXT DEFAULT '',
-  summary       TEXT DEFAULT '',
-  created_at    TEXT NOT NULL,
-  updated_at    TEXT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_res_status  ON reservations(status);
-CREATE INDEX IF NOT EXISTS idx_res_created ON reservations(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_blocked    ON blocked_dates(vehicle_slug, start_date);
-`);
+/* Toutes les fonctions qui touchent la base sont asynchrones : PostgreSQL est
+   asynchrone. Les helpers purs (validation, nettoyage, calcul) restent
+   synchrones et sont utilisés tels quels par l'API. */
 
 export const now = () => new Date().toISOString();
 
@@ -105,70 +21,9 @@ const isoOrEmpty = (v) => {
 /* Les champs dont le nom se termine par « date » (ou « birthdate »). */
 const DATE_FIELD = /(?:_date|birthdate)$/;
 
-/* ---------- migrations ----------
-   SQLite has no "ADD COLUMN IF NOT EXISTS"; on an existing file we compare the
-   real columns with the ones we expect and add only what is missing. */
-const VEHICLE_MIGRATIONS = [
-  ["modele", "TEXT DEFAULT ''"],
-  ["matricule_ww", "TEXT DEFAULT ''"],
-  ["matricule", "TEXT DEFAULT ''"],
-  ["couleur", "TEXT DEFAULT ''"],
-  ["kilometrage", "INTEGER DEFAULT 0"],
-  ["puissance_fiscale", "INTEGER DEFAULT 0"],
-  ["energie", "TEXT DEFAULT ''"],
-  ["climatisation", "TEXT DEFAULT ''"],
-  ["categorie", "TEXT DEFAULT ''"],
-  ["date_circulation", "TEXT DEFAULT ''"],
-  ["en_service", "INTEGER NOT NULL DEFAULT 1"],
-];
-
-function migrateVehicles() {
-  const cols = db.prepare("PRAGMA table_info(vehicles)").all().map((c) => c.name);
-  const added = [];
-  for (const [name, def] of VEHICLE_MIGRATIONS) {
-    if (!cols.includes(name)) {
-      db.exec(`ALTER TABLE vehicles ADD COLUMN ${name} ${def}`);
-      added.push(name);
-    }
-  }
-  return added;
-}
-
-const RESERVATION_MIGRATIONS = [
-  ["created_by", "TEXT DEFAULT ''"],
-  /* Fiche client rattachée (facultatif) : la réservation garde les coordonnées
-     copiées, la fiche sert de répertoire pour retrouver le conducteur. */
-  ["client_id", "INTEGER DEFAULT 0"],
-  ["commercial", "TEXT DEFAULT ''"],
-  ["agency", "TEXT DEFAULT ''"],
-  ["kms_depart", "INTEGER DEFAULT 0"],
-  ["kms_return", "INTEGER DEFAULT 0"],
-  ["distance_km", "INTEGER DEFAULT 0"],
-  ["delivery_type", "TEXT DEFAULT ''"],
-  ["extra_fee_label", "TEXT DEFAULT ''"],
-  ["extra_fee", "INTEGER NOT NULL DEFAULT 0"],
-  ["total_paid", "INTEGER NOT NULL DEFAULT 0"],
-  ["confirmed_at", "TEXT DEFAULT ''"],
-  ["driver2_first_name", "TEXT DEFAULT ''"],
-  ["driver2_last_name", "TEXT DEFAULT ''"],
-  ["driver2_phone", "TEXT DEFAULT ''"],
-  ["driver2_licence", "TEXT DEFAULT ''"],
-  ["driver2_licence_date", "TEXT DEFAULT ''"],
-  ["internal_notes", "TEXT DEFAULT ''"],
-];
-
-function migrateReservations() {
-  const cols = db.prepare("PRAGMA table_info(reservations)").all().map((c) => c.name);
-  const added = [];
-  for (const [name, def] of RESERVATION_MIGRATIONS) {
-    if (!cols.includes(name)) {
-      db.exec(`ALTER TABLE reservations ADD COLUMN ${name} ${def}`);
-      added.push(name);
-    }
-  }
-  return added;
-}
-
+/* ---------- colonnes ajoutées au fil des versions ----------
+   Elles font partie du schéma (supabase/schema.sql) et restent listées ici parce
+   que le dossier admin s'en sert pour savoir ce qu'il a le droit d'écrire. */
 const CONTRACT_MIGRATIONS = [
   // identité du 1er conducteur
   ["d1_birthdate", "TEXT DEFAULT ''"],
@@ -197,181 +52,25 @@ const CONTRACT_MIGRATIONS = [
   ["equipment", "TEXT DEFAULT ''"],
 ];
 
-function migrateContracts() {
-  const cols = db.prepare("PRAGMA table_info(reservations)").all().map((c) => c.name);
-  const added = [];
-  for (const [name, def] of CONTRACT_MIGRATIONS) {
-    if (!cols.includes(name)) {
-      db.exec(`ALTER TABLE reservations ADD COLUMN ${name} ${def}`);
-      added.push(name);
-    }
-  }
-  return added;
-}
-
-/* Signature client : hors de DOSSIER_FIELDS, elle ne doit pas être modifiable
-   par le PATCH générique du dossier (signature_data est une image base64). */
-const SIGNATURE_MIGRATIONS = [
-  ["signature_status", "TEXT DEFAULT ''"],
-  ["signature_token", "TEXT DEFAULT ''"],
-  ["signature_data", "TEXT DEFAULT ''"],
-  ["signature_name", "TEXT DEFAULT ''"],
-  ["signature_mode", "TEXT DEFAULT ''"],
-  ["signature_signed_at", "TEXT DEFAULT ''"],
-  ["signature_requested_at", "TEXT DEFAULT ''"],
-];
-
-function migrateSignatures() {
-  const cols = db.prepare("PRAGMA table_info(reservations)").all().map((c) => c.name);
-  const added = [];
-  for (const [name, def] of SIGNATURE_MIGRATIONS) {
-    if (!cols.includes(name)) {
-      db.exec(`ALTER TABLE reservations ADD COLUMN ${name} ${def}`);
-      added.push(name);
-    }
-  }
-  db.exec("CREATE INDEX IF NOT EXISTS idx_res_sig_token ON reservations(signature_token)");
-  return added;
-}
-
-/** Numérotation des factures, séquence repartant chaque année : F2026-0001. */
-export function nextInvoiceNumber() {
-  const year = new Date().getFullYear();
-  const name = `invoice:${year}`;
-  const row = db.prepare("SELECT value FROM counters WHERE name = ?").get(name);
-  const next = (row ? Number(row.value) : 0) + 1;
-  db.prepare(
-    "INSERT INTO counters (name, value) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET value = excluded.value"
-  ).run(name, next);
-  return `F${year}-${String(next).padStart(4, "0")}`;
-}
-
-/* ---------- signature client ---------- */
-
-/** Crée (ou réutilise) le jeton du lien de signature à distance. */
-export function createSignatureToken(reservationId) {
-  const r = getReservation(reservationId);
-  if (!r) return null;
-  if (r.signature_token) return r.signature_token;
-  const token = randomBytes(24).toString("base64url");
-  db.prepare(
-    "UPDATE reservations SET signature_token = ?, signature_status = ?, signature_requested_at = ?, updated_at = ? WHERE id = ?"
-  ).run(token, "pending", now(), now(), reservationId);
-  return token;
-}
-
-export const getReservationBySignatureToken = (token) =>
-  /^[\w-]{20,64}$/.test(token || "")
-    ? db.prepare("SELECT * FROM reservations WHERE signature_token = ?").get(token)
-    : null;
-
-/** Enregistre la signature : dataUrl = PNG base64, mode = 'onsite' | 'remote'. */
-export function saveSignature(reservationId, { data, name, mode, keepToken }) {
-  const r = getReservation(reservationId);
-  if (!r) return null;
-  db.prepare(
-    `UPDATE reservations
-        SET signature_data = ?, signature_name = ?, signature_mode = ?,
-            signature_signed_at = ?, signature_status = 'signed',
-            signature_token = ?, updated_at = ?
-      WHERE id = ?`
-  ).run(data, name || "", mode || "onsite", now(), keepToken ? r.signature_token : "", now(), reservationId);
-  return getDossier(reservationId);
-}
-
-/** Réinitialise la signature et invalide le lien de signature à distance. */
-export function clearSignature(reservationId) {
-  const r = getReservation(reservationId);
-  if (!r) return null;
-  db.prepare(
-    `UPDATE reservations
-        SET signature_data = '', signature_name = '', signature_mode = '',
-            signature_signed_at = '', signature_status = '', signature_token = '',
-            updated_at = ?
-      WHERE id = ?`
-  ).run(now(), reservationId);
-  return getDossier(reservationId);
-}
-
-db.exec(`
-CREATE TABLE IF NOT EXISTS payments (
-  id             INTEGER PRIMARY KEY AUTOINCREMENT,
-  reservation_id INTEGER NOT NULL REFERENCES reservations(id) ON DELETE CASCADE,
-  amount         INTEGER NOT NULL DEFAULT 0,
-  method         TEXT NOT NULL DEFAULT 'especes',
-  paid_at        TEXT NOT NULL,
-  note           TEXT DEFAULT '',
-  created_at     TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS attachments (
-  id             INTEGER PRIMARY KEY AUTOINCREMENT,
-  reservation_id INTEGER NOT NULL REFERENCES reservations(id) ON DELETE CASCADE,
-  kind           TEXT NOT NULL DEFAULT 'piece',
-  stored_name    TEXT NOT NULL,
-  original_name  TEXT NOT NULL,
-  mime           TEXT NOT NULL,
-  size           INTEGER NOT NULL DEFAULT 0,
-  created_at     TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS counters (
-  name  TEXT PRIMARY KEY,
-  value INTEGER NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS clients (
-  id             INTEGER PRIMARY KEY AUTOINCREMENT,
-  client_type    TEXT NOT NULL DEFAULT 'particulier',
-  last_name      TEXT NOT NULL DEFAULT '',
-  first_name     TEXT DEFAULT '',
-  birthdate      TEXT DEFAULT '',
-  phone          TEXT DEFAULT '',
-  email          TEXT DEFAULT '',
-  address        TEXT DEFAULT '',
-  licence_number TEXT DEFAULT '',
-  licence_date   TEXT DEFAULT '',
-  cin            TEXT DEFAULT '',
-  cin_date       TEXT DEFAULT '',
-  passport       TEXT DEFAULT '',
-  passport_date  TEXT DEFAULT '',
-  entry_number   TEXT DEFAULT '',
-  entry_date     TEXT DEFAULT '',
-  nationality    TEXT DEFAULT '',
-  notes          TEXT DEFAULT '',
-  created_at     TEXT NOT NULL,
-  updated_at     TEXT NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_pay_res ON payments(reservation_id);
-CREATE INDEX IF NOT EXISTS idx_att_res ON attachments(reservation_id);
-`);
-
-export const migratedColumns = [
-  ...migrateVehicles(),
-  ...migrateReservations(),
-  ...migrateContracts(),
-  ...migrateSignatures(),
-];
-
-/* Le numéro de contrat est la référence de la réservation. Les lignes créées
-   avant ce choix portaient un compteur : on les réaligne une fois pour toutes. */
-db.prepare(
-  "UPDATE reservations SET contract_number = ref WHERE contract_number IS NULL OR contract_number = '' OR contract_number <> ref"
-).run();
-
 /* ---------- users ---------- */
-export const countUsers = () => db.prepare("SELECT COUNT(*) AS n FROM users").get().n;
+export const countUsers = async () => (await one("SELECT COUNT(*)::int AS n FROM users")).n;
 
-export const getUser = (username) =>
-  db.prepare("SELECT * FROM users WHERE username = ?").get(username);
+export const getUser = (username) => one("SELECT * FROM users WHERE username = $1", [username]);
 
-export const createUser = (username, passwordHash) =>
-  db
-    .prepare("INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)")
-    .run(username, passwordHash, now());
+export const createUser = async (username, passwordHash) => {
+  await query("INSERT INTO users (username, password_hash, created_at) VALUES ($1, $2, $3)", [
+    username,
+    passwordHash,
+    now(),
+  ]);
+};
 
-/* ---------- vehicles ---------- */
+export const setPassword = (username, passwordHash) =>
+  query("UPDATE users SET password_hash = $1 WHERE username = $2", [passwordHash, username]);
+
+export const deleteUser = (username) => query("DELETE FROM users WHERE username = $1", [username]);
+
+/* ---------- véhicules ---------- */
 const JSON_FIELDS = ["description", "ideal_for", "gallery", "tiers"];
 
 export function rowToVehicle(row) {
@@ -392,16 +91,16 @@ export function rowToVehicle(row) {
   return v;
 }
 
-export const listVehicles = ({ includeInactive = true } = {}) => {
+export async function listVehicles({ includeInactive = true } = {}) {
   const sql = includeInactive
     ? "SELECT * FROM vehicles ORDER BY sort_order, name"
     : "SELECT * FROM vehicles WHERE active = 1 ORDER BY sort_order, name";
-  return db.prepare(sql).all().map(rowToVehicle);
-};
+  return (await many(sql)).map(rowToVehicle);
+}
 
-export const getVehicle = (slug) => rowToVehicle(db.prepare("SELECT * FROM vehicles WHERE slug = ?").get(slug));
+export const getVehicle = async (slug) => rowToVehicle(await one("SELECT * FROM vehicles WHERE slug = $1", [slug]));
 
-/* Columns the admin can write. Order matters only for readability. */
+/* Colonnes que l'admin peut écrire. L'ordre ne sert qu'à la lisibilité. */
 const VEHICLE_FIELDS = [
   "slug", "name", "modele", "tagline", "matricule_ww", "matricule", "couleur",
   "kilometrage", "transmission", "energie", "fuel", "doors", "seats",
@@ -419,7 +118,7 @@ const num = (v, d = 0) => {
   return Number.isFinite(n) ? n : d;
 };
 
-/** Keeps only known keys, with the right type for each. */
+/** Ne garde que les clés connues, avec le bon type pour chacune. */
 function cleanVehicleInput(input = {}) {
   const out = {};
   for (const key of VEHICLE_FIELDS) {
@@ -434,64 +133,71 @@ function cleanVehicleInput(input = {}) {
   return out;
 }
 
-export function insertVehicle(input) {
+export async function insertVehicle(input) {
   const v = cleanVehicleInput(input);
   if (!v.slug || !v.name) throw new Error("slug et name requis");
-  const now_ = now();
   const cols = Object.keys(v);
-  db.prepare(
-    `INSERT INTO vehicles (${cols.join(", ")}, created_at, updated_at) VALUES (${cols.map(() => "?").join(", ")}, ?, ?)`
-  ).run(...cols.map((c) => v[c]), now_, now_);
+  const values = [...cols.map((c) => v[c]), now(), now()];
+  const placeholders = cols.map((_, i) => `$${i + 1}`).join(", ");
+  await query(
+    `INSERT INTO vehicles (${cols.join(", ")}, created_at, updated_at) VALUES (${placeholders}, $${cols.length + 1}, $${cols.length + 2})`,
+    values
+  );
   return getVehicle(v.slug);
 }
 
-export function updateVehicle(slug, input) {
-  const cur = db.prepare("SELECT * FROM vehicles WHERE slug = ?").get(slug);
+export async function updateVehicle(slug, input) {
+  const cur = await one("SELECT * FROM vehicles WHERE slug = $1", [slug]);
   if (!cur) return null;
   const v = cleanVehicleInput(input);
   delete v.slug; // le slug d'origine sert de cible ; le nouveau est géré ci-dessous
   if (!Object.keys(v).length) return getVehicle(slug);
 
-  const sets = Object.keys(v).map((k) => `${k} = ?`).join(", ");
-  db.prepare(`UPDATE vehicles SET ${sets}, updated_at = ? WHERE slug = ?`).run(
-    ...Object.keys(v).map((k) => v[k]),
-    now(),
-    slug
-  );
-
+  const keys = Object.keys(v);
   const newSlug = input.slug && input.slug !== slug ? cleanVehicleInput({ slug: input.slug }).slug : null;
-  if (newSlug) {
-    db.prepare("UPDATE vehicles SET slug = ? WHERE slug = ?").run(newSlug, slug);
-    db.prepare("UPDATE reservations SET vehicle_slug = ? WHERE vehicle_slug = ?").run(newSlug, slug);
-    db.prepare("UPDATE blocked_dates SET vehicle_slug = ? WHERE vehicle_slug = ?").run(newSlug, slug);
-    return getVehicle(newSlug);
-  }
-  return getVehicle(slug);
+
+  await tx(async (t) => {
+    const sets = keys.map((k, i) => `${k} = $${i + 1}`).join(", ");
+    await t.query(
+      `UPDATE vehicles SET ${sets}, updated_at = $${keys.length + 1} WHERE slug = $${keys.length + 2}`,
+      [...keys.map((k) => v[k]), now(), slug]
+    );
+    if (newSlug) {
+      /* Le renommage touche aussi les réservations et indisponibilités qui pointent
+         sur l'ancien slug : sans transaction, une coupure laisserait des orphelins. */
+      await t.query("UPDATE vehicles SET slug = $1 WHERE slug = $2", [newSlug, slug]);
+      await t.query("UPDATE reservations SET vehicle_slug = $1 WHERE vehicle_slug = $2", [newSlug, slug]);
+      await t.query("UPDATE blocked_dates SET vehicle_slug = $1 WHERE vehicle_slug = $2", [newSlug, slug]);
+    }
+  });
+
+  return getVehicle(newSlug || slug);
 }
 
-export const deleteVehicle = (slug) => {
-  const used = db.prepare("SELECT COUNT(*) AS n FROM reservations WHERE vehicle_slug = ?").get(slug).n;
+export async function deleteVehicle(slug) {
+  const used = (await one("SELECT COUNT(*)::int AS n FROM reservations WHERE vehicle_slug = $1", [slug])).n;
   if (used > 0) return { ok: false, reason: "used", reservations: used };
-  db.prepare("DELETE FROM vehicles WHERE slug = ?").run(slug);
+  await query("DELETE FROM vehicles WHERE slug = $1", [slug]);
   return { ok: true };
-};
+}
 
-/* ---------- blocked dates ---------- */
+/* ---------- indisponibilités ---------- */
 export const listBlocked = (slug) =>
   slug
-    ? db.prepare("SELECT * FROM blocked_dates WHERE vehicle_slug = ? ORDER BY start_date").all(slug)
-    : db.prepare("SELECT * FROM blocked_dates ORDER BY start_date").all();
+    ? many("SELECT * FROM blocked_dates WHERE vehicle_slug = $1 ORDER BY start_date", [slug])
+    : many("SELECT * FROM blocked_dates ORDER BY start_date");
 
-export function addBlocked(b) {
-  db.prepare(
-    "INSERT INTO blocked_dates (vehicle_slug, start_date, end_date, reason, created_at) VALUES (?,?,?,?,?)"
-  ).run(b.vehicle_slug, b.start_date, b.end_date, b.reason || "", now());
-  return db.prepare("SELECT last_insert_rowid() AS id").get().id;
+export async function addBlocked(b) {
+  const row = await one(
+    "INSERT INTO blocked_dates (vehicle_slug, start_date, end_date, reason, created_at) VALUES ($1,$2,$3,$4,$5) RETURNING id",
+    [b.vehicle_slug, b.start_date, b.end_date, b.reason || "", now()]
+  );
+  return row.id;
 }
 
-export const deleteBlocked = (id) => db.prepare("DELETE FROM blocked_dates WHERE id = ?").run(id);
+export const deleteBlocked = (id) => query("DELETE FROM blocked_dates WHERE id = $1", [id]);
 
-/* ---------- reservations ---------- */
+/* ---------- réservations ---------- */
 const RES_COLUMNS = [
   "vehicle_slug", "vehicle_name", "first_name", "last_name", "country_code", "phone",
   "licence_number", "licence_date", "passport", "pickup", "ret",
@@ -509,52 +215,63 @@ export const DOSSIER_FIELDS = [
   "notes", "status", "pickup", "ret", "pickup_date", "pickup_time", "return_date", "return_time",
 ];
 
-export function createReservation(r) {
+/* Colonnes numériques : une valeur manquante y vaut 0, partout ailleurs "". */
+const RES_NUM_COLUMNS = new Set(["baby_seat", "one_way", "days", "daily", "seat_total", "total"]);
+
+export async function createReservation(r) {
   const ref = makeRef();
-  const stmt = db.prepare(
+  const values = [
+    ref,
+    ...RES_COLUMNS.map((c) => r[c] ?? (RES_NUM_COLUMNS.has(c) ? 0 : "")),
+    now(),
+    now(),
+  ];
+  const placeholders = values.map((_, i) => `$${i + 1}`).join(", ");
+  await query(
     `INSERT INTO reservations (ref, status, ${RES_COLUMNS.join(", ")}, created_at, updated_at)
-     VALUES (?, 'nouvelle', ${RES_COLUMNS.map(() => "?").join(", ")}, ?, ?)`
+     VALUES ($1, 'nouvelle', ${RES_COLUMNS.map((_, i) => `$${i + 2}`).join(", ")}, $${values.length - 1}, $${values.length})`,
+    values
   );
-  stmt.run(ref, ...RES_COLUMNS.map((c) => r[c] ?? (typeof r[c] === "number" ? r[c] : 0)), now(), now());
   return getReservationByRef(ref);
 }
 
-export const getReservation = (id) =>
-  db.prepare("SELECT * FROM reservations WHERE id = ?").get(id);
+export const getReservation = (id) => one("SELECT * FROM reservations WHERE id = $1", [id]);
 
-export const getReservationByRef = (ref) =>
-  db.prepare("SELECT * FROM reservations WHERE ref = ?").get(ref);
+export const getReservationByRef = (ref) => one("SELECT * FROM reservations WHERE ref = $1", [ref]);
 
-export const listReservations = ({ status, q, limit = 200, offset = 0 } = {}) => {
+export async function listReservations({ status, q, limit = 200, offset = 0 } = {}) {
   const where = [];
   const params = [];
   if (status) {
-    where.push("status = ?");
+    where.push("status = $1");
     params.push(status);
   }
   if (q) {
-    where.push("(first_name LIKE ? OR last_name LIKE ? OR phone LIKE ? OR ref LIKE ? OR vehicle_name LIKE ?)");
-    const like = `%${q}%`;
-    params.push(like, like, like, like, like);
+    /* SQLite ignorait la casse sur LIKE ; PostgreSQL est sensible, d'où ILIKE
+       pour garder exactement le même comportement de recherche. */
+    params.push(`%${q}%`);
+    const i = params.length;
+    where.push(
+      `(first_name ILIKE $${i} OR last_name ILIKE $${i} OR phone ILIKE $${i} OR ref ILIKE $${i} OR vehicle_name ILIKE $${i})`
+    );
   }
+  params.push(limit, offset);
   const sql =
     "SELECT * FROM reservations" +
     (where.length ? " WHERE " + where.join(" AND ") : "") +
-    " ORDER BY created_at DESC LIMIT ? OFFSET ?";
-  return db.prepare(sql).all(...params, limit, offset);
-};
+    ` ORDER BY created_at DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
+  return many(sql, params);
+}
 
-export const countReservations = () =>
-  db.prepare("SELECT COUNT(*) AS n FROM reservations").get().n;
+export const countReservations = async () => (await one("SELECT COUNT(*)::int AS n FROM reservations")).n;
 
-export const countByStatus = () =>
-  db
-    .prepare("SELECT status, COUNT(*) AS n FROM reservations GROUP BY status")
-    .all()
-    .reduce((acc, r) => ({ ...acc, [r.status]: r.n }), {});
+export async function countByStatus() {
+  const rows = await many("SELECT status, COUNT(*)::int AS n FROM reservations GROUP BY status");
+  return rows.reduce((acc, r) => ({ ...acc, [r.status]: r.n }), {});
+}
 
-export const updateReservation = (id, patch) => {
-  const cur = getReservation(id);
+export async function updateReservation(id, patch) {
+  const cur = await getReservation(id);
   if (!cur) return null;
   const allowed = new Set([...RES_COLUMNS, ...DOSSIER_FIELDS]);
   /* Une date invalide est ignorée plutôt qu'écrite : elle partirait sur le contrat. */
@@ -564,7 +281,6 @@ export const updateReservation = (id, patch) => {
   if (!keys.length) return cur;
   const INT = new Set(["kms_depart", "kms_return", "distance_km", "extra_fee", "total_paid"]);
   const BOOL_JSON = new Set(["options", "equipment"]);
-  const sets = keys.map((k) => `${k} = ?`);
   const values = keys.map((k) => {
     if (INT.has(k)) return Number(patch[k]) || 0;
     if (BOOL_JSON.has(k)) return JSON.stringify(patch[k] && typeof patch[k] === "object" ? patch[k] : {});
@@ -576,15 +292,21 @@ export const updateReservation = (id, patch) => {
   if (patch.status && patch.status !== cur.status) {
     if (["confirmee", "livree"].includes(patch.status) && !cur.confirmed_at) {
       values.push(now());
-      sets.push("confirmed_at = ?");
+      keys.push("confirmed_at");
     }
     if (patch.status === "annulee") {
-      db.prepare("DELETE FROM payments WHERE reservation_id = ?").run(id);
+      await query("DELETE FROM payments WHERE reservation_id = $1", [id]);
     }
   }
-  db.prepare(`UPDATE reservations SET ${sets.join(", ")}, updated_at = ? WHERE id = ?`).run(...values, now(), id);
+  values.push(now());
+  keys.push("updated_at");
+  const sets = keys.map((k, i) => `${k} = $${i + 1}`);
+  await query(
+    `UPDATE reservations SET ${sets.join(", ")} WHERE id = $${values.length + 1}`,
+    [...values, id]
+  );
   return getReservation(id);
-};
+}
 
 /* ---------- dossier : totaux, règlements, pièces jointes ---------- */
 
@@ -606,15 +328,17 @@ const LOCKED_STATUSES = ["confirmee", "livree"];
 export const isDossierOpen = (r) => LOCKED_STATUSES.includes(r?.status);
 
 /** Réservation enrichie : totaux, règlements, pièces, et l'état métier. */
-export function getDossier(id) {
-  const r = getReservation(id);
+export async function getDossier(id) {
+  const r = await getReservation(id);
   if (!r) return null;
-  const payments = db
-    .prepare("SELECT * FROM payments WHERE reservation_id = ? ORDER BY paid_at DESC, id DESC")
-    .all(id);
-  const attachments = db
-    .prepare("SELECT * FROM attachments WHERE reservation_id = ? ORDER BY id DESC")
-    .all(id);
+  const payments = await many(
+    "SELECT * FROM payments WHERE reservation_id = $1 ORDER BY paid_at DESC, id DESC",
+    [id]
+  );
+  const attachments = await many(
+    "SELECT * FROM attachments WHERE reservation_id = $1 ORDER BY id DESC",
+    [id]
+  );
 
   const parseJson = (v) => {
     try { return JSON.parse(v || "{}"); } catch { return {}; }
@@ -666,56 +390,55 @@ export function getDossier(id) {
   };
 }
 
-export function addPayment(reservationId, p) {
-  const res = getReservation(reservationId);
+export async function addPayment(reservationId, p) {
+  const res = await getReservation(reservationId);
   if (!res) return null;
   const paidAt = /^\d{4}-\d{2}-\d{2}$/.test(p.paid_at || "") ? p.paid_at : now().slice(0, 10);
-  db.prepare(
-    "INSERT INTO payments (reservation_id, amount, method, paid_at, note, created_at) VALUES (?,?,?,?,?,?)"
-  ).run(reservationId, p.amount || 0, p.method || "especes", paidAt, p.note || "", now());
-  recalcPaid(reservationId);
+  await query(
+    "INSERT INTO payments (reservation_id, amount, method, paid_at, note, created_at) VALUES ($1,$2,$3,$4,$5,$6)",
+    [reservationId, p.amount || 0, p.method || "especes", paidAt, p.note || "", now()]
+  );
+  await recalcPaid(reservationId);
   return listPayments(reservationId);
 }
 
 /** Le total versé est toujours dérivé des règlements : jamais saisi en double. */
-export function recalcPaid(reservationId) {
-  const sum = db
-    .prepare("SELECT COALESCE(SUM(amount), 0) AS n FROM payments WHERE reservation_id = ?")
-    .get(reservationId).n;
-  db.prepare("UPDATE reservations SET total_paid = ?, updated_at = ? WHERE id = ?")
-    .run(sum, now(), reservationId);
-  return sum;
+export async function recalcPaid(reservationId) {
+  const { n } = await one("SELECT COALESCE(SUM(amount), 0)::int AS n FROM payments WHERE reservation_id = $1", [reservationId]);
+  await query("UPDATE reservations SET total_paid = $1, updated_at = $2 WHERE id = $3", [n, now(), reservationId]);
+  return n;
 }
 
 export const listPayments = (id) =>
-  db.prepare("SELECT * FROM payments WHERE reservation_id = ? ORDER BY paid_at DESC, id DESC").all(id);
+  many("SELECT * FROM payments WHERE reservation_id = $1 ORDER BY paid_at DESC, id DESC", [id]);
 
-export const deletePayment = (paymentId) => {
-  const row = db.prepare("SELECT reservation_id FROM payments WHERE id = ?").get(paymentId);
+export async function deletePayment(paymentId) {
+  const row = await one("SELECT reservation_id FROM payments WHERE id = $1", [paymentId]);
   if (!row) return false;
-  db.prepare("DELETE FROM payments WHERE id = ?").run(paymentId);
-  recalcPaid(row.reservation_id);
+  await query("DELETE FROM payments WHERE id = $1", [paymentId]);
+  await recalcPaid(row.reservation_id);
   return true;
-};
+}
 
 export const listAttachments = (id) =>
-  db.prepare("SELECT * FROM attachments WHERE reservation_id = ? ORDER BY id DESC").all(id);
+  many("SELECT * FROM attachments WHERE reservation_id = $1 ORDER BY id DESC", [id]);
 
-export function addAttachment(reservationId, a) {
-  db.prepare(
-    "INSERT INTO attachments (reservation_id, kind, stored_name, original_name, mime, size, created_at) VALUES (?,?,?,?,?,?,?)"
-  ).run(reservationId, a.kind || "piece", a.stored_name, a.original_name, a.mime || "", a.size || 0, now());
+export async function addAttachment(reservationId, a) {
+  await query(
+    "INSERT INTO attachments (reservation_id, kind, stored_name, original_name, mime, size, created_at) VALUES ($1,$2,$3,$4,$5,$6,$7)",
+    [reservationId, a.kind || "piece", a.stored_name, a.original_name, a.mime || "", a.size || 0, now()]
+  );
   return listAttachments(reservationId);
 }
 
-export const deleteAttachment = (attachmentId) => {
-  const row = db.prepare("SELECT stored_name FROM attachments WHERE id = ?").get(attachmentId);
+export async function deleteAttachment(attachmentId) {
+  const row = await one("SELECT stored_name FROM attachments WHERE id = $1", [attachmentId]);
   if (!row) return false;
-  db.prepare("DELETE FROM attachments WHERE id = ?").run(attachmentId);
+  await query("DELETE FROM attachments WHERE id = $1", [attachmentId]);
   return row.stored_name;
-};
+}
 
-export const deleteReservation = (id) => db.prepare("DELETE FROM reservations WHERE id = ?").run(id);
+export const deleteReservation = (id) => query("DELETE FROM reservations WHERE id = $1", [id]);
 
 /* ---------- clients ---------- */
 
@@ -737,33 +460,33 @@ const rowToClient = (row) => {
 };
 
 /** Liste filtrée : nom, prénom, téléphone, email, CIN, passeport, n° d'entrée. */
-export function listClients({ q = "", type = "" } = {}) {
+export async function listClients({ q = "", type = "" } = {}) {
   const where = [];
   const params = [];
   if (type === "particulier" || type === "professionnel" || type === "entreprise") {
-    where.push("client_type = ?");
+    where.push("client_type = $1");
     params.push(type);
   }
   const needle = String(q || "").trim();
   if (needle) {
+    /* COLLATE NOCASE n'existe pas en PostgreSQL : lower() fait le même travail. */
+    params.push(`%${needle}%`);
+    const i = params.length;
     where.push(
-      `(last_name LIKE ? OR first_name LIKE ? OR phone LIKE ? OR email LIKE ?
-        OR cin LIKE ? OR passport LIKE ? OR licence_number LIKE ? OR entry_number LIKE ?)`
+      `(last_name ILIKE $${i} OR first_name ILIKE $${i} OR phone ILIKE $${i} OR email ILIKE $${i}
+        OR cin ILIKE $${i} OR passport ILIKE $${i} OR licence_number ILIKE $${i} OR entry_number ILIKE $${i})`
     );
-    const like = `%${needle}%`;
-    params.push(like, like, like, like, like, like, like, like);
   }
   const sql = `SELECT * FROM clients ${where.length ? "WHERE " + where.join(" AND ") : ""}
-               ORDER BY last_name COLLATE NOCASE, first_name COLLATE NOCASE, id DESC`;
-  return db.prepare(sql).all(...params).map(rowToClient);
+               ORDER BY lower(last_name), lower(first_name), id DESC`;
+  return (await many(sql, params)).map(rowToClient);
 }
 
-export const getClient = (id) =>
-  rowToClient(db.prepare("SELECT * FROM clients WHERE id = ?").get(Number(id)));
+export const getClient = async (id) => rowToClient(await one("SELECT * FROM clients WHERE id = $1", [Number(id)]));
 
-export const countClients = () => db.prepare("SELECT COUNT(*) AS n FROM clients").get().n;
+export const countClients = async () => (await one("SELECT COUNT(*)::int AS n FROM clients")).n;
 
-/** Ne conserve que les champs connus, en texte, pour éviter d'écrire du n'importe quoi. */
+/** Ne conserve que les champs connus, en texte, pour éviter d'écrire n'importe quoi. */
 function cleanClient(input) {
   const out = {};
   for (const key of CLIENT_FIELDS) {
@@ -778,30 +501,103 @@ function cleanClient(input) {
   return out;
 }
 
-export function createClient(input) {
+export async function createClient(input) {
   const data = cleanClient(input);
   if (!data.last_name) return null;
   const cols = CLIENT_FIELDS.filter((f) => f in data);
-  const res = db.prepare(
+  const values = [...cols.map((c) => data[c]), now(), now()];
+  const row = await one(
     `INSERT INTO clients (${cols.join(", ")}, created_at, updated_at)
-     VALUES (${cols.map(() => "?").join(", ")}, ?, ?)`
-  ).run(...cols.map((c) => data[c]), now(), now());
-  return getClient(res.lastInsertRowid);
+     VALUES (${cols.map((_, i) => `$${i + 1}`).join(", ")}, $${cols.length + 1}, $${cols.length + 2})
+     RETURNING id`,
+    values
+  );
+  return getClient(row.id);
 }
 
-export function updateClient(id, input) {
-  const target = getClient(id);
+export async function updateClient(id, input) {
+  const target = await getClient(id);
   if (!target) return null;
   const data = cleanClient(input);
   const cols = CLIENT_FIELDS.filter((f) => f in data);
   if (!cols.length) return target;
-  db.prepare(`UPDATE clients SET ${cols.map((c) => `${c} = ?`).join(", ")}, updated_at = ? WHERE id = ?`)
-    .run(...cols.map((c) => data[c]), now(), Number(id));
+  const values = [...cols.map((c) => data[c]), now(), Number(id)];
+  await query(
+    `UPDATE clients SET ${cols.map((c, i) => `${c} = $${i + 1}`).join(", ")},
+       updated_at = $${cols.length + 1} WHERE id = $${cols.length + 2}`,
+    values
+  );
   return getClient(id);
 }
 
-export const deleteClient = (id) =>
-  db.prepare("DELETE FROM clients WHERE id = ?").run(Number(id)).changes > 0;
+export const deleteClient = async (id) =>
+  (await query("DELETE FROM clients WHERE id = $1", [Number(id)])).rowCount > 0;
+
+/* ---------- compteurs ---------- */
+
+/** Numérotation des factures, séquence repartant chaque année : F2026-0001.
+ *  L'incrément se fait en base : deux factures générées au même instant ne
+ *  peuvent pas obtenir le même numéro. */
+export async function nextInvoiceNumber() {
+  const year = new Date().getFullYear();
+  const { value } = await one(
+    `INSERT INTO counters (name, value) VALUES ($1, 1)
+     ON CONFLICT (name) DO UPDATE SET value = counters.value + 1
+     RETURNING value`,
+    [`invoice:${year}`]
+  );
+  return `F${year}-${String(value).padStart(4, "0")}`;
+}
+
+/* ---------- signature client ---------- */
+
+/** Crée (ou réutilise) le jeton du lien de signature à distance. */
+export async function createSignatureToken(reservationId) {
+  const r = await getReservation(reservationId);
+  if (!r) return null;
+  if (r.signature_token) return r.signature_token;
+  const token = randomBytes(24).toString("base64url");
+  await query(
+    "UPDATE reservations SET signature_token = $1, signature_status = $2, signature_requested_at = $3, updated_at = $4 WHERE id = $5",
+    [token, "pending", now(), now(), reservationId]
+  );
+  return token;
+}
+
+export const getReservationBySignatureToken = (token) =>
+  /^[\w-]{20,64}$/.test(token || "")
+    ? one("SELECT * FROM reservations WHERE signature_token = $1", [token])
+    : Promise.resolve(null);
+
+/** Enregistre la signature : dataUrl = PNG base64, mode = 'onsite' | 'remote'. */
+export async function saveSignature(reservationId, { data, name, mode, keepToken }) {
+  const r = await getReservation(reservationId);
+  if (!r) return null;
+  await query(
+    `UPDATE reservations
+        SET signature_data = $1, signature_name = $2, signature_mode = $3,
+            signature_signed_at = $4, signature_status = 'signed',
+            signature_token = $5, updated_at = $6
+      WHERE id = $7`,
+    [data, name || "", mode || "onsite", now(), keepToken ? r.signature_token : "", now(), reservationId]
+  );
+  return getDossier(reservationId);
+}
+
+/** Réinitialise la signature et invalide le lien de signature à distance. */
+export async function clearSignature(reservationId) {
+  const r = await getReservation(reservationId);
+  if (!r) return null;
+  await query(
+    `UPDATE reservations
+        SET signature_data = '', signature_name = '', signature_mode = '',
+            signature_signed_at = '', signature_status = '', signature_token = '',
+            updated_at = $1
+      WHERE id = $2`,
+    [now(), reservationId]
+  );
+  return getDossier(reservationId);
+}
 
 function makeRef() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";

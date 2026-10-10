@@ -6,9 +6,11 @@ import { fileURLToPath } from "node:url";
 import { api } from "./api.js";
 import { attachUser, needsSetup, requireAdminPage } from "./auth.js";
 import { contractHtml } from "./contract.js";
-import { db, getDossier, getReservationBySignatureToken, getVehicle, isDossierOpen, listVehicles, saveSignature } from "./db.js";
+import { getDossier, getReservationBySignatureToken, getVehicle, isDossierOpen, listVehicles, saveSignature } from "./db.js";
+import { closeDb } from "./pg.js";
 import { seedFleet } from "./seed.js";
 import { signPageHtml } from "./signature.js";
+import { readStored, STORAGE_MODE } from "./uploads.js";
 import { adminShell, loginPage } from "./views.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -18,7 +20,18 @@ const HOST = process.env.HOST || "127.0.0.1";
 
 const app = express();
 app.disable("x-powered-by");
-app.locals.db = db;
+
+/* Derriere un reverse proxy (Render, Railway, Nginx…), req.protocol et
+   req.secure ne sont justes qu'en faisant confiance a l'en-tete du proxy :
+   sans cela le cookie de session ne serait jamais « secure » en HTTPS et les
+   liens de signature seraient generes en http://. */
+if (process.env.NODE_ENV === "production" || process.env.TRUST_PROXY) {
+  app.set("trust proxy", 1);
+}
+
+/* Une promesse rejetée dans un handler ne rejoint pas le middleware d'erreur
+   d'Express 4 : on la route explicitement vers next(). */
+const h = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 /* Les photos arrivent en base64 dans le JSON. Ce parseur doit passer AVANT le
    parseur global, sinon une photo de plusieurs Mo serait rejetée en 413.
@@ -69,30 +82,44 @@ app.get("/doc-assets/doc-print.js", (_req, res) => res.sendFile(join(here, "publ
 app.get("/doc-assets/signature-pad.js", (_req, res) => res.sendFile(join(here, "public", "signature-pad.js")));
 app.get("/doc-assets/sign-page.js", (_req, res) => res.sendFile(join(here, "public", "sign-page.js")));
 
+/* ---------- fichiers stockés (Supabase Storage ou disque) ---------- */
+/* Les chemins publics restent « uploads/… » quel que soit le driver : c'est ce
+   qui permet de migrer vers Supabase sans toucher au site ni à l'admin. */
+app.get(/^\/uploads\/(.+)$/, h(async (req, res) => {
+  const file = await readStored(req.params[0]);
+  if (!file) return res.status(404).type("text/plain").send("Fichier introuvable");
+  /* Les pièces de dossier (CIN, permis, contrats) sont confidentielles et
+     supprimables : jamais de cache. Les photos de véhicules, elles, sont
+     immuables tant que le véhicule existe. */
+  const dossier = req.params[0].startsWith("reservations/");
+  res.setHeader("Cache-Control", dossier ? "private, no-store" : "public, max-age=31536000, immutable");
+  res.type(file.mime).send(file.buffer);
+}));
+
 /* ---------- signature client (lien public, protégé par jeton) ---------- */
-app.get("/sign/:token/contrat", (req, res) => {
-  const r = getReservationBySignatureToken(req.params.token);
+app.get("/sign/:token/contrat", h(async (req, res) => {
+  const r = await getReservationBySignatureToken(req.params.token);
   if (!r) return res.status(404).type("text/plain").send("Lien de signature introuvable ou expiré.");
   if (!isDossierOpen(r)) {
     return res.status(410).type("text/plain").send("Ce contrat n'est plus ouvert à la signature.");
   }
-  const vehicle = r.vehicle_slug ? getVehicle(r.vehicle_slug) : null;
+  const vehicle = r.vehicle_slug ? await getVehicle(r.vehicle_slug) : null;
   res.setHeader("Cache-Control", "no-store");
-  res.type("html").send(contractHtml(getDossier(r.id), vehicle, { toolbar: false }));
-});
+  res.type("html").send(contractHtml(await getDossier(r.id), vehicle, { toolbar: false }));
+}));
 
-app.get("/sign/:token", (req, res) => {
-  const r = getReservationBySignatureToken(req.params.token);
+app.get("/sign/:token", h(async (req, res) => {
+  const r = await getReservationBySignatureToken(req.params.token);
   if (!r) return res.status(404).type("text/plain").send("Lien de signature introuvable ou expiré.");
   if (!isDossierOpen(r)) {
     return res.status(410).type("text/plain").send("Ce contrat n'est plus ouvert à la signature.");
   }
   res.setHeader("Cache-Control", "no-store");
-  res.type("html").send(signPageHtml(getDossier(r.id), req.params.token));
-});
+  res.type("html").send(signPageHtml(await getDossier(r.id), req.params.token));
+}));
 
-app.post("/sign/:token", (req, res) => {
-  const r = getReservationBySignatureToken(req.params.token);
+app.post("/sign/:token", h(async (req, res) => {
+  const r = await getReservationBySignatureToken(req.params.token);
   if (!r) return res.status(404).json({ error: "Lien de signature introuvable ou expiré." });
   if (!isDossierOpen(r)) {
     return res.status(410).json({ error: "Ce contrat n'est plus ouvert à la signature." });
@@ -104,14 +131,14 @@ app.post("/sign/:token", (req, res) => {
     return res.status(400).json({ error: "Signature invalide." });
   }
   /* Le jeton est conservé : le client peut ainsi relire son contrat signé. */
-  saveSignature(r.id, { data: signature, name, mode: "remote", keepToken: true });
+  await saveSignature(r.id, { data: signature, name, mode: "remote", keepToken: true });
   res.json({ ok: true });
-});
+}));
 
-app.get("/admin/login", (req, res) => {
+app.get("/admin/login", h(async (req, res) => {
   if (req.user) return res.redirect("/admin");
-  res.send(loginPage(needsSetup()));
-});
+  res.send(loginPage(await needsSetup()));
+}));
 
 app.get("/admin", requireAdminPage, (_req, res) => res.send(adminShell()));
 
@@ -178,12 +205,12 @@ const checkEnv = () => {
   }
 };
 
-/** Base vide (première installation, ou hébergeur au disque éphémère) :
- *  on importe la flotte par défaut, sinon le site s'affiche sans véhicules. */
-function ensureFleet() {
+/** Base vide (première installation) : on importe la flotte par défaut, sinon
+ *  le site s'affiche sans véhicules. */
+async function ensureFleet() {
   try {
-    if (listVehicles().length > 0) return;
-    const r = seedFleet();
+    if ((await listVehicles()).length > 0) return;
+    const r = await seedFleet();
     console.log(`\n  Flotte importée : ${r.added} véhicule(s) depuis assets/js/data.js.`);
     console.log(`  Créez le compte administrateur sur ${baseUrl()}/admin\n`);
   } catch (e) {
@@ -195,15 +222,25 @@ const baseUrl = () => `http://${HOST}:${PORT}`;
 
 if (process.argv[1] && existsSync(process.argv[1])) {
   checkEnv();
-  ensureFleet();
-  app.listen(PORT, HOST, () => {
+  await ensureFleet();
+  const setup = await needsSetup();
+  app.listen(PORT, HOST, async () => {
     const base = `http://${HOST}:${PORT}`;
     console.log(`\n  Leegend Cars`);
     console.log(`  ─────────────────────────────────`);
     console.log(`  Site      ${base}/`);
     console.log(`  Admin     ${base}/admin`);
-    if (needsSetup()) console.log(`\n  ⚠  Première connexion : créez le compte admin sur ${base}/admin\n`);
+    console.log(`  Stockage  ${STORAGE_MODE === "supabase" ? "Supabase Storage" : "disque local"}`);
+    if (setup) console.log(`\n  ⚠  Première connexion : créez le compte admin sur ${base}/admin\n`);
     else console.log(`  Connexion : ${base}/admin/login\n`);
+  });
+}
+
+/* Le pool garde des connexions ouvertes : sans cet arrêt propre, « npm start »
+   ne se termine jamais et les redéploiements finissent en timeout. */
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.on(signal, () => {
+    closeDb().finally(() => process.exit(0));
   });
 }
 

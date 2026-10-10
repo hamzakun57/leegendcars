@@ -1,11 +1,11 @@
 import express from "express";
 import {
-addBlocked, addAttachment, addPayment, clearSignature, computeTotals, countByStatus, countReservations,
-createClient, createReservation, createSignatureToken, deleteAttachment, deleteBlocked, deleteClient,
-deletePayment, deleteReservation, deleteVehicle, DOSSIER_FIELDS, getClient, getDossier, getUser,
-getVehicle, insertVehicle, isDossierOpen, listAttachments, listBlocked, listClients, listReservations,
-listVehicles, nextInvoiceNumber, saveSignature, updateClient, updateReservation,
-updateVehicle,
+  addBlocked, addAttachment, addPayment, clearSignature, computeTotals, countByStatus, countReservations,
+  createClient, createReservation, createSignatureToken, deleteAttachment, deleteBlocked, deleteClient,
+  deletePayment, deleteReservation, deleteVehicle, DOSSIER_FIELDS, getClient, getDossier, getUser,
+  getVehicle, insertVehicle, isDossierOpen, listAttachments, listBlocked, listClients, listReservations,
+  listVehicles, nextInvoiceNumber, saveSignature, setPassword, updateClient, updateReservation,
+  updateVehicle,
 } from "./db.js";
 import { deletePhoto, deleteStored, DOC_KINDS, MAX_PHOTOS, saveDocument, savePhoto } from "./uploads.js";
 import { contractHtml } from "./contract.js";
@@ -47,6 +47,11 @@ const validTime = (v) => /^([01]\d|2[0-3]):[0-5]\d$/.test(str(v)) || str(v) === 
 
 export const api = express.Router();
 
+/* PostgreSQL est asynchrone : chaque handler est une promesse. En Express 4 une
+   rejection non rattrapée ne rejoint pas le middleware d'erreur, on la route donc
+   explicitement vers next(). */
+const h = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
+
 /* ============ public: pricing + availability (used by the site) ============ */
 /**
  * Forme publique d'un véhicule : le site consomme la base en direct, donc on
@@ -72,18 +77,18 @@ const publicVehicle = (v) => ({
   tiers: v.tiers || [],
 });
 
-api.get("/vehicles", (_req, res) => {
+api.get("/vehicles", h(async (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  res.json({ vehicles: listVehicles({ includeInactive: false }).map(publicVehicle) });
-});
+  res.json({ vehicles: (await listVehicles({ includeInactive: false })).map(publicVehicle) });
+}));
 
-api.get("/pricing", (req, res) => {
+api.get("/pricing", h(async (req, res) => {
   const slug = str(req.query.vehicle);
   const from = str(req.query.from);
   const to = str(req.query.to);
   const seat = int(req.query.babySeat);
 
-  const v = slug ? getVehicle(slug) : listVehicles({ includeInactive: false })[0];
+  const v = slug ? await getVehicle(slug) : (await listVehicles({ includeInactive: false }))[0];
   if (!v) return res.status(404).json({ error: "Véhicule introuvable" });
 
   const ms = (isDate(from) && isDate(to) ? new Date(to + "T00:00:00") - new Date(from + "T00:00:00") : 0);
@@ -92,7 +97,7 @@ api.get("/pricing", (req, res) => {
   let daily = v.price_from;
   for (const t of v.tiers) if (days >= t.days) daily = t.price;
 
-  const blocked = listBlocked(v.slug).filter((b) => (!from || b.end_date >= from) && (!to || b.start_date <= to));
+  const blocked = (await listBlocked(v.slug)).filter((b) => (!from || b.end_date >= from) && (!to || b.start_date <= to));
 
   res.json({
     vehicle: v.slug,
@@ -103,10 +108,10 @@ api.get("/pricing", (req, res) => {
     blocked,
     available: blocked.length === 0,
   });
-});
+}));
 
 /* ============ public: receive a reservation ============ */
-api.post("/reservations", (req, res) => {
+api.post("/reservations", h(async (req, res) => {
   const b = req.body || {};
   const errors = [];
 
@@ -131,7 +136,7 @@ api.post("/reservations", (req, res) => {
   if (!isDate(returnDate)) errors.push("returnDate");
   if (isDate(pickupDate) && isDate(returnDate) && returnDate < pickupDate) errors.push("returnDate");
 
-  const vehicle = b.vehicleSlug ? getVehicle(str(b.vehicleSlug, 60)) : null;
+  const vehicle = b.vehicleSlug ? await getVehicle(str(b.vehicleSlug, 60)) : null;
   if (b.vehicleSlug && !vehicle) errors.push("vehicleSlug");
 
   if (errors.length) {
@@ -139,7 +144,7 @@ api.post("/reservations", (req, res) => {
   }
 
   const seatRate = int(b.babySeat);
-  const v = vehicle || listVehicles({ includeInactive: false })[0];
+  const v = vehicle || (await listVehicles({ includeInactive: false }))[0];
 
   let days = 0, daily = 0, seatTotal = 0, total = 0;
   if (v) {
@@ -162,7 +167,7 @@ api.post("/reservations", (req, res) => {
     days ? `Estimation : ${days} jour(s) × ${daily} MAD = ${total} MAD` : "",
   ].filter(Boolean).join("\n");
 
-  const saved = createReservation({
+  const saved = await createReservation({
     vehicle_slug: v ? v.slug : "",
     vehicle_name: v ? v.name : "",
     first_name: first,
@@ -189,57 +194,58 @@ api.post("/reservations", (req, res) => {
   });
 
   res.status(201).json({ ok: true, ref: saved.ref, days, daily, seatTotal, total });
-});
+}));
 
 /* ============ admin: session ============ */
-api.post("/admin/login", (req, res) => {
+api.post("/admin/login", h(async (req, res) => {
   const username = str(req.body?.username, 60);
   const password = String(req.body?.password || "");
-  const user = getUser(username);
+  const user = await getUser(username);
   if (!user || !verifyPassword(password, user.password_hash)) {
     return res.status(401).json({ error: "Identifiants incorrects" });
   }
   setSessionCookie(res, username);
   res.json({ ok: true });
-});
+}));
 
 api.post("/admin/logout", (_req, res) => {
   clearSessionCookie(res);
   res.json({ ok: true });
 });
 
-api.get("/admin/me", (req, res) => res.json({ user: req.user, needsSetup: needsSetup() }));
+api.get("/admin/me", h(async (req, res) => res.json({ user: req.user, needsSetup: await needsSetup() })));
 
-api.post("/admin/setup", (req, res) => {
-  if (!needsSetup()) return res.status(409).json({ error: "Déjà configuré" });
+api.post("/admin/setup", h(async (req, res) => {
+  if (!(await needsSetup())) return res.status(409).json({ error: "Déjà configuré" });
   const username = str(req.body?.username, 60);
   const password = String(req.body?.password || "");
   if (username.length < 3) return res.status(422).json({ error: "Identifiant trop court" });
   if (password.length < 8) return res.status(422).json({ error: "Mot de passe : 8 caractères minimum" });
-  setupAdmin(username, password);
+  await setupAdmin(username, password);
   setSessionCookie(res, username);
   res.json({ ok: true });
-});
+}));
 
 /* ============ admin: dashboard ============ */
-api.get("/admin/stats", requireAdmin, (_req, res) => {
-  const byStatus = countByStatus();
+api.get("/admin/stats", requireAdmin, h(async (_req, res) => {
+  const byStatus = await countByStatus();
+  const all = await listVehicles();
   res.json({
-    total: countReservations(),
+    total: await countReservations(),
     nouvelles: byStatus.nouvelle || 0,
     confirmees: byStatus.confirmee || 0,
     annulees: byStatus.annulee || 0,
     livrees: byStatus.livree || 0,
-    vehicles: listVehicles().length,
-    activeVehicles: listVehicles({ includeInactive: false }).length,
+    vehicles: all.length,
+    activeVehicles: (await listVehicles({ includeInactive: false })).length,
   });
-});
+}));
 
 /* ============ admin: reservations ============ */
-api.get("/admin/reservations", requireAdmin, (req, res) => {
+api.get("/admin/reservations", requireAdmin, h(async (req, res) => {
   const status = RES_STATUSES.includes(str(req.query.status, 20)) ? str(req.query.status, 20) : null;
   const q = str(req.query.q, 60);
-  const rows = listReservations({ status, q, limit: int(req.query.limit) || 200, offset: int(req.query.offset) || 0 });
+  const rows = await listReservations({ status, q, limit: int(req.query.limit) || 200, offset: int(req.query.offset) || 0 });
   res.json({
     reservations: rows.map((r) => ({
       ...r,
@@ -247,15 +253,15 @@ api.get("/admin/reservations", requireAdmin, (req, res) => {
       dossierOpen: isDossierOpen(r),
     })),
   });
-});
+}));
 
-api.get("/admin/reservations/:id", requireAdmin, (req, res) => {
-  const d = getDossier(int(req.params.id));
+api.get("/admin/reservations/:id", requireAdmin, h(async (req, res) => {
+  const d = await getDossier(int(req.params.id));
   if (!d) return res.status(404).json({ error: "Réservation introuvable" });
   res.json({ reservation: d });
-});
+}));
 
-api.patch("/admin/reservations/:id", requireAdmin, (req, res) => {
+api.patch("/admin/reservations/:id", requireAdmin, h(async (req, res) => {
   const id = int(req.params.id);
   const patch = {};
   const b = req.body || {};
@@ -274,39 +280,39 @@ api.patch("/admin/reservations/:id", requireAdmin, (req, res) => {
     if (b[k] !== undefined) patch[k] = str(b[k], 1000);
   }
 
-  const updated = updateReservation(id, patch);
+  const updated = await updateReservation(id, patch);
   if (!updated) return res.status(404).json({ error: "Réservation introuvable" });
-  res.json({ ok: true, reservation: getDossier(id) });
-});
+  res.json({ ok: true, reservation: await getDossier(id) });
+}));
 
 /* ---------- règlements ---------- */
-api.post("/admin/reservations/:id/payments", requireAdmin, (req, res) => {
+api.post("/admin/reservations/:id/payments", requireAdmin, h(async (req, res) => {
   const id = int(req.params.id);
-  const d = getDossier(id);
+  const d = await getDossier(id);
   if (!d) return res.status(404).json({ error: "Réservation introuvable" });
   if (!d.dossierOpen) {
     return res.status(409).json({ error: "Confirmez la réservation avant d'enregistrer un règlement." });
   }
   const amount = int(req.body?.amount);
   if (amount <= 0) return res.status(422).json({ error: "Montant invalide" });
-  const payments = addPayment(id, {
+  const payments = await addPayment(id, {
     amount,
     method: PAYMENT_METHODS.includes(str(req.body?.method, 20)) ? str(req.body.method, 20) : "especes",
     paid_at: str(req.body?.paid_at, 10),
     note: str(req.body?.note, 200),
   });
-  res.status(201).json({ ok: true, payments, reservation: getDossier(id) });
-});
+  res.status(201).json({ ok: true, payments, reservation: await getDossier(id) });
+}));
 
-api.delete("/admin/payments/:id", requireAdmin, (req, res) => {
-  if (!deletePayment(int(req.params.id))) return res.status(404).json({ error: "Règlement introuvable" });
+api.delete("/admin/payments/:id", requireAdmin, h(async (req, res) => {
+  if (!(await deletePayment(int(req.params.id)))) return res.status(404).json({ error: "Règlement introuvable" });
   res.json({ ok: true });
-});
+}));
 
 /* ---------- pièces jointes ---------- */
-api.post("/admin/reservations/:id/attachments", requireAdmin, (req, res) => {
+api.post("/admin/reservations/:id/attachments", requireAdmin, h(async (req, res) => {
   const id = int(req.params.id);
-  const d = getDossier(id);
+  const d = await getDossier(id);
   if (!d) return res.status(404).json({ error: "Réservation introuvable" });
   if (!d.dossierOpen) {
     return res.status(409).json({ error: "Confirmez la réservation avant d'ajouter une pièce jointe." });
@@ -318,27 +324,28 @@ api.post("/admin/reservations/:id/attachments", requireAdmin, (req, res) => {
   const errors = [];
   for (const dataUrl of files.slice(0, 6)) {
     try {
-      const saved = saveDocument(dataUrl, kind);
-      addAttachment(id, { kind, stored_name: saved.storedName, original_name: name || "document", mime: saved.mime, size: saved.size });
+      const saved = await saveDocument(dataUrl, kind);
+      await addAttachment(id, { kind, stored_name: saved.storedName, original_name: name || "document", mime: saved.mime, size: saved.size });
     } catch (e) {
       errors.push(e.message);
     }
   }
-  if (!listAttachments(id).length && errors.length) return res.status(422).json({ error: errors.join(" ; ") });
-  res.status(201).json({ ok: true, attachments: listAttachments(id), warnings: errors });
-});
+  const attachments = await listAttachments(id);
+  if (!attachments.length && errors.length) return res.status(422).json({ error: errors.join(" ; ") });
+  res.status(201).json({ ok: true, attachments, warnings: errors });
+}));
 
-api.delete("/admin/attachments/:id", requireAdmin, (req, res) => {
-  const stored = deleteAttachment(int(req.params.id));
+api.delete("/admin/attachments/:id", requireAdmin, h(async (req, res) => {
+  const stored = await deleteAttachment(int(req.params.id));
   if (!stored) return res.status(404).json({ error: "Pièce jointe introuvable" });
-  deleteStored(stored);
+  await deleteStored(stored);
   res.json({ ok: true });
-});
+}));
 
-/* ---------- contrat PDF ---------- */
-api.get("/admin/reservations/:id/contract", requireAdmin, (req, res) => {
+/* ---------- contrat / facture (HTML imprimable) ---------- */
+api.get("/admin/reservations/:id/contract", requireAdmin, h(async (req, res) => {
   const id = int(req.params.id);
-  const r = getDossier(id);
+  const r = await getDossier(id);
   if (!r) return res.status(404).json({ error: "Réservation introuvable" });
   if (!r.dossierOpen) {
     return res.status(409).json({ error: "Confirmez la réservation avant de générer le contrat." });
@@ -346,27 +353,27 @@ api.get("/admin/reservations/:id/contract", requireAdmin, (req, res) => {
   /* Le n° de contrat EST la référence de la réservation : il bouge avec elle et
      le client retrouve son contrat par le même numéro que sa réservation. */
   if (r.contract_number !== r.ref) {
-    updateReservation(id, { contract_number: r.ref });
+    await updateReservation(id, { contract_number: r.ref });
   }
-  const fresh = getDossier(id);
-  const vehicle = fresh.vehicle_slug ? getVehicle(fresh.vehicle_slug) : null;
+  const fresh = await getDossier(id);
+  const vehicle = fresh.vehicle_slug ? await getVehicle(fresh.vehicle_slug) : null;
   res.type("html").send(contractHtml(fresh, vehicle));
-});
+}));
 
-api.get("/admin/reservations/:id/invoice", requireAdmin, (req, res) => {
+api.get("/admin/reservations/:id/invoice", requireAdmin, h(async (req, res) => {
   const id = int(req.params.id);
-  const r = getDossier(id);
+  const r = await getDossier(id);
   if (!r) return res.status(404).json({ error: "Réservation introuvable" });
   if (!r.dossierOpen) {
     return res.status(409).json({ error: "Confirmez la réservation avant de générer la facture." });
   }
   if (!r.invoice_number) {
-    updateReservation(id, { invoice_number: nextInvoiceNumber() });
+    await updateReservation(id, { invoice_number: await nextInvoiceNumber() });
   }
-  const fresh = getDossier(id);
-  const vehicle = fresh.vehicle_slug ? getVehicle(fresh.vehicle_slug) : null;
+  const fresh = await getDossier(id);
+  const vehicle = fresh.vehicle_slug ? await getVehicle(fresh.vehicle_slug) : null;
   res.type("html").send(invoiceHtml(fresh, vehicle));
-});
+}));
 
 /* ---------- signature client ---------- */
 /* Le lien se compose avec l'origin de la requête : il faut que le serveur soit
@@ -377,25 +384,25 @@ const publicOrigin = (req) => {
 };
 
 /** Crée le lien de signature à distance et renvoie son URL. */
-api.post("/admin/reservations/:id/signature/link", requireAdmin, (req, res) => {
+api.post("/admin/reservations/:id/signature/link", requireAdmin, h(async (req, res) => {
   const id = int(req.params.id);
-  const r = getDossier(id);
+  const r = await getDossier(id);
   if (!r) return res.status(404).json({ error: "Réservation introuvable" });
   if (!r.dossierOpen) {
     return res.status(409).json({ error: "Confirmez la réservation avant de demander une signature." });
   }
   if (!r.contract_number) {
-    updateReservation(id, { contract_number: r.ref });
+    await updateReservation(id, { contract_number: r.ref });
   }
-  const token = createSignatureToken(id);
+  const token = await createSignatureToken(id);
   if (!token) return res.status(500).json({ error: "Impossible de créer le lien." });
   res.json({ token, url: `${publicOrigin(req)}/sign/${token}`, status: "pending" });
-});
+}));
 
 /** Signature saisie par le client devant l'agent (pas de jeton). */
-api.post("/admin/reservations/:id/signature", requireAdmin, (req, res) => {
+api.post("/admin/reservations/:id/signature", requireAdmin, h(async (req, res) => {
   const id = int(req.params.id);
-  const r = getDossier(id);
+  const r = await getDossier(id);
   if (!r) return res.status(404).json({ error: "Réservation introuvable" });
   if (!r.dossierOpen) {
     return res.status(409).json({ error: "Confirmez la réservation avant d'enregistrer une signature." });
@@ -406,26 +413,26 @@ api.post("/admin/reservations/:id/signature", requireAdmin, (req, res) => {
   if (!/^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(signature) || signature.length > 2_000_000) {
     return res.status(400).json({ error: "Signature invalide." });
   }
-  const fresh = saveSignature(id, { data: signature, name, mode: "onsite", keepToken: false });
+  const fresh = await saveSignature(id, { data: signature, name, mode: "onsite", keepToken: false });
   res.json({ ok: true, signatureSignedAt: fresh.signatureSignedAt, signatureName: fresh.signatureName });
-});
+}));
 
-api.delete("/admin/reservations/:id/signature", requireAdmin, (req, res) => {
+api.delete("/admin/reservations/:id/signature", requireAdmin, h(async (req, res) => {
   const id = int(req.params.id);
-  if (!getDossier(id)) return res.status(404).json({ error: "Réservation introuvable" });
-  clearSignature(id);
+  if (!(await getDossier(id))) return res.status(404).json({ error: "Réservation introuvable" });
+  await clearSignature(id);
   res.json({ ok: true });
-});
+}));
 
-api.delete("/admin/reservations/:id", requireAdmin, (req, res) => {
-  deleteReservation(int(req.params.id));
+api.delete("/admin/reservations/:id", requireAdmin, h(async (req, res) => {
+  await deleteReservation(int(req.params.id));
   res.json({ ok: true });
-});
+}));
 
 /* ============ admin: vehicles ============ */
-api.get("/admin/vehicles", requireAdmin, (_req, res) => {
-  res.json({ vehicles: listVehicles() });
-});
+api.get("/admin/vehicles", requireAdmin, h(async (_req, res) => {
+  res.json({ vehicles: await listVehicles() });
+}));
 
 /** N'accepte qu'un chemin relatif sûr : ces valeurs finissent dans <img src>. */
 const SAFE_IMAGE_PATH = /^(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._\-/]+$/;
@@ -436,7 +443,7 @@ const isSafeImagePath = (p) =>
 const photoPath = (p) => (typeof p === "string" ? p : p?.publicPath || p?.storedName || "");
 
 /** Transforme les photos base64 en fichiers et renvoie la galerie complète. */
-function buildGallery(body, current = []) {
+async function buildGallery(body, current = []) {
   const kept = Array.isArray(body.keepPhotos) ? body.keepPhotos.filter(isSafeImagePath) : null;
   const added = Array.isArray(body.photos) ? body.photos : [];
   /* Les galleries plus anciennes peuvent contenir des objets (retour de
@@ -444,13 +451,13 @@ function buildGallery(body, current = []) {
   const currentPaths = current.map(photoPath).filter(Boolean);
 
   // Invariant : tout fichier de l'ancienne galerie absent de la nouvelle est
-  // supprimé du disque, que le client l'ait retiré explicitement ou non.
+  // supprimé du stockage, que le client l'ait retiré explicitement ou non.
   const target = kept ? kept.slice(0, 20) : currentPaths.slice();
   const gone = new Set([
     ...currentPaths.filter((p) => !target.includes(p)),
     ...(Array.isArray(body.removePhotos) ? body.removePhotos.map(photoPath).filter(Boolean) : []),
   ]);
-  gone.forEach(deletePhoto);
+  for (const p of gone) await deletePhoto(p);
 
   const gallery = target.slice();
   const errors = [];
@@ -459,7 +466,7 @@ function buildGallery(body, current = []) {
   }
   for (const dataUrl of added.slice(0, MAX_PHOTOS)) {
     try {
-      gallery.push(photoPath(savePhoto(dataUrl)));
+      gallery.push(photoPath(await savePhoto(dataUrl)));
     } catch (e) {
       errors.push(e.message);
     }
@@ -467,29 +474,29 @@ function buildGallery(body, current = []) {
   return { gallery: gallery.slice(0, MAX_PHOTOS), errors };
 }
 
-api.post("/admin/vehicles", requireAdmin, (req, res) => {
+api.post("/admin/vehicles", requireAdmin, h(async (req, res) => {
   const b = req.body || {};
   if (!str(b.name, 80)) return res.status(422).json({ error: "Nom requis" });
   /* Slug facultatif : s'il est absent on le déduit du nom, et une saisie
      imparfaite (majuscule, espace, accent) est corrigée au lieu d'être refusée. */
   let slug = slugify(str(b.slug, 80)) || slugify(str(b.name, 80));
   if (!SLUG_RE.test(slug)) return res.status(422).json({ error: "Slug invalide (minuscules, chiffres, tirets)" });
-  if (getVehicle(slug)) return res.status(409).json({ error: "Ce slug existe déjà" });
+  if (await getVehicle(slug)) return res.status(409).json({ error: "Ce slug existe déjà" });
 
-  const { gallery, errors } = buildGallery(b);
-  const vehicle = insertVehicle({ ...b, slug, gallery, price_from: int(b.price_from), deposit: int(b.deposit) });
+  const { gallery, errors } = await buildGallery(b);
+  const vehicle = await insertVehicle({ ...b, slug, gallery, price_from: int(b.price_from), deposit: int(b.deposit) });
   res.status(201).json({ ok: true, vehicle, warnings: errors });
-});
+}));
 
-api.put("/admin/vehicles/:slug", requireAdmin, (req, res) => {
+api.put("/admin/vehicles/:slug", requireAdmin, h(async (req, res) => {
   const slug = str(req.params.slug, 80);
   const b = req.body || {};
-  const existing = getVehicle(slug);
+  const existing = await getVehicle(slug);
   if (!existing) return res.status(404).json({ error: "Véhicule introuvable" });
   if (b.slug && !SLUG_RE.test(str(b.slug, 80))) return res.status(422).json({ error: "Slug invalide" });
 
-  const { gallery, errors } = buildGallery(b, existing.gallery);
-  const vehicle = updateVehicle(slug, {
+  const { gallery, errors } = await buildGallery(b, existing.gallery);
+  const vehicle = await updateVehicle(slug, {
     ...b,
     gallery,
     price_from: int(b.price_from),
@@ -497,52 +504,52 @@ api.put("/admin/vehicles/:slug", requireAdmin, (req, res) => {
   });
   if (!vehicle) return res.status(404).json({ error: "Véhicule introuvable" });
   res.json({ ok: true, vehicle, warnings: errors });
-});
+}));
 
-api.delete("/admin/vehicles/:slug", requireAdmin, (req, res) => {
+api.delete("/admin/vehicles/:slug", requireAdmin, h(async (req, res) => {
   const slug = str(req.params.slug, 80);
-  const v = getVehicle(slug);
-  const r = deleteVehicle(slug);
+  const v = await getVehicle(slug);
+  const r = await deleteVehicle(slug);
   if (!r.ok) {
     return res.status(409).json({
       error: `Impossible de supprimer : ${r.reservations} réservation(s) liée(s). Désactivez le véhicule à la place.`,
     });
   }
-  (v?.gallery || []).forEach(deletePhoto);
+  for (const p of v?.gallery || []) await deletePhoto(p);
   res.json({ ok: true });
-});
+}));
 
 /* ============ admin: availability ============ */
-api.get("/admin/blocked", requireAdmin, (req, res) => {
+api.get("/admin/blocked", requireAdmin, h(async (req, res) => {
   const slug = str(req.query.vehicle, 80);
-  res.json({ blocked: listBlocked(slug || null) });
-});
+  res.json({ blocked: await listBlocked(slug || null) });
+}));
 
-api.post("/admin/blocked", requireAdmin, (req, res) => {
+api.post("/admin/blocked", requireAdmin, h(async (req, res) => {
   const b = req.body || {};
   const slug = str(b.vehicle_slug, 80);
   const start = str(b.start_date, 10);
   const end = str(b.end_date, 10);
-  if (!getVehicle(slug)) return res.status(422).json({ error: "Véhicule inconnu" });
+  if (!(await getVehicle(slug))) return res.status(422).json({ error: "Véhicule inconnu" });
   if (!isDate(start) || !isDate(end)) return res.status(422).json({ error: "Dates invalides (AAAA-MM-JJ)" });
   if (end < start) return res.status(422).json({ error: "La fin doit être après le début" });
-  const id = addBlocked({ vehicle_slug: slug, start_date: start, end_date: end, reason: str(b.reason, 120) });
+  const id = await addBlocked({ vehicle_slug: slug, start_date: start, end_date: end, reason: str(b.reason, 120) });
   res.status(201).json({ ok: true, id });
-});
+}));
 
-api.delete("/admin/blocked/:id", requireAdmin, (req, res) => {
-  deleteBlocked(int(req.params.id));
+api.delete("/admin/blocked/:id", requireAdmin, h(async (req, res) => {
+  await deleteBlocked(int(req.params.id));
   res.json({ ok: true });
-});
+}));
 
 /* ============ admin: création manuelle d'une réservation ============ */
 /* Le client peut venir de la fiche Clients (client_id) ou être saisi à la main.
    Les totaux sont recalculés côté serveur à partir du barème du véhicule :
    l'agent ne peut pas envoyer un total fantaisiste. */
-api.post("/admin/reservations", requireAdmin, (req, res) => {
+api.post("/admin/reservations", requireAdmin, h(async (req, res) => {
   const b = req.body || {};
 
-  const client = int(b.client_id) ? getClient(int(b.client_id)) : null;
+  const client = int(b.client_id) ? await getClient(int(b.client_id)) : null;
   if (int(b.client_id) && !client) {
     return res.status(422).json({ error: "Fiche client introuvable" });
   }
@@ -569,7 +576,7 @@ api.post("/admin/reservations", requireAdmin, (req, res) => {
   if (isDate(pickupDate) && isDate(returnDate) && returnDate < pickupDate) {
     errors.push("la date de retour doit suivre la date de départ");
   }
-  const vehicle = b.vehicle_slug ? getVehicle(str(b.vehicle_slug, 60)) : null;
+  const vehicle = b.vehicle_slug ? await getVehicle(str(b.vehicle_slug, 60)) : null;
   if (b.vehicle_slug && !vehicle) errors.push("Véhicule");
   if (errors.length) {
     return res.status(422).json({ error: "Complétez : " + errors.join(", ") + "." });
@@ -596,7 +603,7 @@ api.post("/admin/reservations", requireAdmin, (req, res) => {
     days ? `Estimation : ${days} jour(s) × ${daily} MAD = ${total} MAD` : "",
   ].filter(Boolean).join("\n");
 
-  const saved = createReservation({
+  const saved = await createReservation({
     client_id: client ? client.id : 0,
     vehicle_slug: vehicle ? vehicle.slug : "",
     vehicle_name: vehicle ? vehicle.name : "",
@@ -629,7 +636,7 @@ api.post("/admin/reservations", requireAdmin, (req, res) => {
      font pas partie de l'INSERT de createReservation, on les écrit ensuite.
      On en profite pour recopier l'identité complète dans le dossier, afin que le
      contrat soit pré-rempli (CIN, adresse, nationalité, dates des documents). */
-  updateReservation(saved.id, {
+  await updateReservation(saved.id, {
     client_id: client ? client.id : 0,
     created_by: str(b.created_by, 60) || req.user?.username || "",
     d1_cin: client?.cin || str(b.cin, 40),
@@ -641,55 +648,53 @@ api.post("/admin/reservations", requireAdmin, (req, res) => {
     ...(status !== "nouvelle" ? { status } : {}),
   });
 
-  const fresh = getDossier(saved.id);
+  const fresh = await getDossier(saved.id);
   res.status(201).json({ ok: true, reservation: fresh, days, daily, seatTotal, total });
-});
+}));
 
 /* ============ admin: clients ============ */
-api.get("/admin/clients", requireAdmin, (req, res) => {
-  res.json({ clients: listClients({ q: str(req.query.q, 80), type: str(req.query.type, 20) }) });
-});
+api.get("/admin/clients", requireAdmin, h(async (req, res) => {
+  res.json({ clients: await listClients({ q: str(req.query.q, 80), type: str(req.query.type, 20) }) });
+}));
 
-api.get("/admin/clients/:id", requireAdmin, (req, res) => {
-  const c = getClient(int(req.params.id));
+api.get("/admin/clients/:id", requireAdmin, h(async (req, res) => {
+  const c = await getClient(int(req.params.id));
   if (!c) return res.status(404).json({ error: "Client introuvable" });
   res.json({ client: c });
-});
+}));
 
-api.post("/admin/clients", requireAdmin, (req, res) => {
+api.post("/admin/clients", requireAdmin, h(async (req, res) => {
   const b = req.body || {};
   if (!str(b.last_name, 80)) return res.status(422).json({ error: "Le nom est obligatoire" });
-  const client = createClient(b);
+  const client = await createClient(b);
   if (!client) return res.status(422).json({ error: "Client invalide" });
   res.status(201).json({ ok: true, client });
-});
+}));
 
-api.patch("/admin/clients/:id", requireAdmin, (req, res) => {
+api.patch("/admin/clients/:id", requireAdmin, h(async (req, res) => {
   const b = req.body || {};
   if ("last_name" in b && !str(b.last_name, 80)) {
     return res.status(422).json({ error: "Le nom est obligatoire" });
   }
-  const client = updateClient(int(req.params.id), b);
+  const client = await updateClient(int(req.params.id), b);
   if (!client) return res.status(404).json({ error: "Client introuvable" });
   res.json({ ok: true, client });
-});
+}));
 
-api.delete("/admin/clients/:id", requireAdmin, (req, res) => {
-  if (!deleteClient(int(req.params.id))) return res.status(404).json({ error: "Client introuvable" });
+api.delete("/admin/clients/:id", requireAdmin, h(async (req, res) => {
+  if (!(await deleteClient(int(req.params.id)))) return res.status(404).json({ error: "Client introuvable" });
   res.json({ ok: true });
-});
+}));
 
 /* ============ admin: password ============ */
-api.post("/admin/password", requireAdmin, (req, res) => {
+api.post("/admin/password", requireAdmin, h(async (req, res) => {
   const current = String(req.body?.current || "");
   const next = String(req.body?.next || "");
-  const user = getUser(req.user.username);
-  if (!verifyPassword(current, user.password_hash)) {
+  const user = await getUser(req.user.username);
+  if (!user || !verifyPassword(current, user.password_hash)) {
     return res.status(401).json({ error: "Mot de passe actuel incorrect" });
   }
   if (next.length < 8) return res.status(422).json({ error: "Mot de passe : 8 caractères minimum" });
-  // reuse the model: store a fresh hash
-  const { db } = req.app.locals;
-  db.prepare("UPDATE users SET password_hash = ? WHERE username = ?").run(hashPassword(next), req.user.username);
+  await setPassword(req.user.username, hashPassword(next));
   res.json({ ok: true });
-});
+}));

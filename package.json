@@ -8,11 +8,15 @@
     "node": ">=22.5.0"
   },
   "scripts": {
-    "start": "node server/server.js",
-    "dev": "node --watch server/server.js",
-    "seed": "node server/seed.js"
+    "start": "node --env-file-if-exists=.env server/server.js",
+    "dev": "node --watch --env-file-if-exists=.env server/server.js",
+    "seed": "node --env-file-if-exists=.env server/seed.js",
+    "db:setup": "node --env-file-if-exists=.env scripts/db-setup.mjs",
+    "migrate:sqlite": "node --env-file-if-exists=.env scripts/migrate-sqlite.mjs",
+    "test:e2e": "node --env-file-if-exists=.env scripts/test-e2e.mjs"
   },
   "dependencies": {
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "pg": "^8.23.1"
   }
 }

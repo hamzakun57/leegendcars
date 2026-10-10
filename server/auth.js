@@ -83,10 +83,14 @@ function parseCookies(header) {
   return out;
 }
 
-export function attachUser(req, _res, next) {
+export async function attachUser(req, _res, next) {
   req.user = null;
-  const data = readToken(parseCookies(req.headers.cookie)[COOKIE]);
-  if (data && getUser(data.u)) req.user = { username: data.u };
+  try {
+    const data = readToken(parseCookies(req.headers.cookie)[COOKIE]);
+    if (data && (await getUser(data.u))) req.user = { username: data.u };
+  } catch {
+    /* base injoignable : on laisse passer en anonyme plutôt que de bloquer tout le site */
+  }
   next();
 }
 
@@ -104,9 +108,9 @@ export function requireAdminPage(req, res, next) {
 }
 
 /* ---------- first-run setup ---------- */
-export const needsSetup = () => countUsers() === 0;
+export const needsSetup = async () => (await countUsers()) === 0;
 
-export function setupAdmin(username, password) {
-  if (!needsSetup()) throw new Error("Un administrateur existe déjà.");
-  createUser(username, hashPassword(password));
+export async function setupAdmin(username, password) {
+  if (await needsSetup()) return createUser(username, hashPassword(password));
+  throw new Error("Un administrateur existe déjà.");
 }
