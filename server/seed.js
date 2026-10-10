@@ -49,24 +49,38 @@ const toRow = (v, i) => ({
 });
 
 const fleet = loadFleet();
-let added = 0;
-let updated = 0;
-let skipped = 0;
 
-for (const [i, v] of fleet.entries()) {
-  const existing = getVehicle(v.slug);
-  if (!existing) {
-    insertVehicle(toRow(v, i));
-    added++;
-  } else if (force) {
-    updateVehicle(v.slug, toRow(v, i));
-    updated++;
-  } else {
-    skipped++;
+/**
+ * Importe la flotte déclarée dans data.js.
+ * Utilisé au démarrage quand la base est vide (première installation, ou
+ * hébergeur au disque éphémère comme Render gratuit) : sans cela, le site
+ * afficherait un catalogue vide.
+ */
+export function seedFleet({ force = false } = {}) {
+  let added = 0;
+  let updated = 0;
+  let skipped = 0;
+
+  for (const [i, v] of fleet.entries()) {
+    const existing = getVehicle(v.slug);
+    if (!existing) {
+      insertVehicle(toRow(v, i));
+      added++;
+    } else if (force) {
+      updateVehicle(v.slug, toRow(v, i));
+      updated++;
+    } else {
+      skipped++;
+    }
   }
+  return { added, updated, skipped, total: listVehicles().length };
 }
 
-console.log(
-  `Flotte : ${added} ajouté(s), ${updated} mis à jour${skipped ? `, ${skipped} ignoré(s)` : ""}. ` +
-    `Total en base : ${listVehicles().length}.`
-);
+/* Exécution directe : npm run seed [-- --force] */
+if (process.argv[1] && process.argv[1].endsWith("seed.js")) {
+  const r = seedFleet({ force: force || undefined });
+  console.log(
+    `Flotte : ${r.added} ajouté(s), ${r.updated} mis à jour${r.skipped ? `, ${r.skipped} ignoré(s)` : ""}. ` +
+      `Total en base : ${r.total}.`
+  );
+}

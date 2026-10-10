@@ -6,7 +6,8 @@ import { fileURLToPath } from "node:url";
 import { api } from "./api.js";
 import { attachUser, needsSetup, requireAdminPage } from "./auth.js";
 import { contractHtml } from "./contract.js";
-import { db, getDossier, getReservationBySignatureToken, getVehicle, isDossierOpen, saveSignature } from "./db.js";
+import { db, getDossier, getReservationBySignatureToken, getVehicle, isDossierOpen, listVehicles, saveSignature } from "./db.js";
+import { seedFleet } from "./seed.js";
 import { signPageHtml } from "./signature.js";
 import { adminShell, loginPage } from "./views.js";
 
@@ -177,8 +178,24 @@ const checkEnv = () => {
   }
 };
 
+/** Base vide (première installation, ou hébergeur au disque éphémère) :
+ *  on importe la flotte par défaut, sinon le site s'affiche sans véhicules. */
+function ensureFleet() {
+  try {
+    if (listVehicles().length > 0) return;
+    const r = seedFleet();
+    console.log(`\n  Flotte importée : ${r.added} véhicule(s) depuis assets/js/data.js.`);
+    console.log(`  Créez le compte administrateur sur ${baseUrl()}/admin\n`);
+  } catch (e) {
+    console.error("[erreur] import de la flotte :", e.message);
+  }
+}
+
+const baseUrl = () => `http://${HOST}:${PORT}`;
+
 if (process.argv[1] && existsSync(process.argv[1])) {
   checkEnv();
+  ensureFleet();
   app.listen(PORT, HOST, () => {
     const base = `http://${HOST}:${PORT}`;
     console.log(`\n  Leegend Cars`);

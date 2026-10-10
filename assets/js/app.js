@@ -262,11 +262,17 @@
     return Math.max(1, Math.round((b - a) / 86400000));
   };
 
+  /* Un véhicule ajouté depuis l'admin peut n'avoir aucun barème : on part alors
+     du prix affiché, sinon le calcul du total interromprait la réservation. */
   const dailyFor = (vehicle, days) => {
-    let price = vehicle.tiers[0].price;
-    vehicle.tiers.forEach((t) => {
-      if (days >= t.days) price = t.price;
-    });
+    const tiers = Array.isArray(vehicle.tiers) ? vehicle.tiers : [];
+    let price = Number(vehicle.priceFrom) || 0;
+    if (tiers.length) {
+      price = Number(tiers[0].price) || price;
+      tiers.forEach((t) => {
+        if (days >= t.days) price = Number(t.price) || price;
+      });
+    }
     return price;
   };
 
