@@ -8,7 +8,7 @@
     phonePrimaryTel: "+212628394947",
     phoneSecondary: "+212 6 60 81 98 57",
     phoneSecondaryTel: "+212660819857",
-    address: "Tanger, Maroc — livraison dans tous les aéroports du pays",
+    address: "Tanger , Maroc — livraison dans tous les aéroports du pays",
     mapsUrl: "https://www.google.com/maps/search/?api=1&query=Tanger%2C%20Maroc",
     hours: "7j/7 · 24h/24",
     year: new Date().getFullYear(),
