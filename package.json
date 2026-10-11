@@ -1,40 +1,42 @@
 {
-    "name":  "leegend-cars",
-    "version":  "1.0.0",
-    "private":  true,
-    "description":  "Leegend Cars â€” site public + back-office (rÃ©servations \u0026 flotte)",
-    "type":  "module",
-    "engines":  {
-                    "node":  "\u003e=22.5.0"
-                },
-    "scripts":  {
-                    "start":  "node --env-file-if-exists=.env server/server.js",
-                    "dev":  "node --watch --env-file-if-exists=.env server/server.js",
-                    "build:netlify":  "node scripts/build-client.mjs",
-                    "seed":  "node --env-file-if-exists=.env server/seed.js",
-                    "db:setup":  "node --env-file-if-exists=.env scripts/db-setup.mjs",
-                    "migrate:sqlite":  "node --env-file-if-exists=.env scripts/migrate-sqlite.mjs",
-                    "test:e2e":  "node --env-file-if-exists=.env scripts/test-e2e.mjs",
-                    "test:maintenance":  "node --env-file-if-exists=.env scripts/test-maintenance.mjs",
-                    "test:theme":  "node --env-file-if-exists=.env scripts/test-theme.mjs",
-                    "check:files":  "node --env-file-if-exists=.env scripts/check-files.mjs",
-                    "test:empty":  "node --env-file-if-exists=.env scripts/test-empty-fleet.mjs",
-                    "test:rls":  "node --env-file-if-exists=.env scripts/test-rls.mjs",
-                    "test":  "npm run clean:test-data \u0026\u0026 npm run test:e2e \u0026\u0026 npm run test:maintenance \u0026\u0026 npm run test:theme \u0026\u0026 npm run test:empty \u0026\u0026 npm run test:rls \u0026\u0026 npm run test:client \u0026\u0026 npm run test:adapter \u0026\u0026 npm run test:files \u0026\u0026 npm run test:edge",
-                    "reset:demo":  "node --env-file-if-exists=.env scripts/reset-demo.mjs",
-                    "clean:test-data":  "node --env-file-if-exists=.env scripts/clean-test-data.mjs",
-                    "build":  "node scripts/build-client.mjs",
-                    "test:client":  "node --env-file-if-exists=.env scripts/test-client-direct.mjs",
-                    "test:adapter":  "node --env-file-if-exists=.env scripts/test-admin-adapter.mjs",
-                    "test:files":  "node --experimental-strip-types scripts/test-files.mjs",
-                    "test:edge":  "node --env-file-if-exists=.env scripts/test-edge-functions.mjs"
-                },
-    "dependencies":  {
-                         "@supabase/supabase-js":  "^2.117.3",
-                         "express":  "^4.21.2",
-                         "pg":  "^8.23.1"
-                     },
-    "devDependencies":  {
-                            "jsdom":  "^30.1.2"
-                        }
+  "name": "leegend-cars",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Leegend Cars — site public + back-office (réservations & flotte)",
+  "type": "module",
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "scripts": {
+    "prestart": "node scripts/build-client.mjs",
+    "start": "node --env-file-if-exists=.env server/server.js",
+    "predev": "node scripts/build-client.mjs",
+    "dev": "node --watch --env-file-if-exists=.env server/server.js",
+    "build": "node scripts/build-client.mjs",
+    "build:netlify": "node scripts/build-client.mjs",
+    "seed": "node --env-file-if-exists=.env server/seed.js",
+    "db:setup": "node --env-file-if-exists=.env scripts/db-setup.mjs",
+    "migrate:sqlite": "node --env-file-if-exists=.env scripts/migrate-sqlite.mjs",
+    "clean:test-data": "node --env-file-if-exists=.env scripts/clean-test-data.mjs",
+    "reset:demo": "node --env-file-if-exists=.env scripts/reset-demo.mjs",
+    "test": "npm run clean:test-data && npm run test:e2e && npm run test:maintenance && npm run test:theme && npm run test:empty && npm run test:rls && npm run test:client && npm run test:adapter && npm run test:files && npm run test:edge",
+    "test:e2e": "node --env-file-if-exists=.env scripts/test-e2e.mjs",
+    "test:maintenance": "node --env-file-if-exists=.env scripts/test-maintenance.mjs",
+    "test:theme": "node --env-file-if-exists=.env scripts/test-theme.mjs",
+    "test:empty": "node --env-file-if-exists=.env scripts/test-empty-fleet.mjs",
+    "test:rls": "node --env-file-if-exists=.env scripts/test-rls.mjs",
+    "test:client": "node --env-file-if-exists=.env scripts/test-client-direct.mjs",
+    "test:adapter": "node --env-file-if-exists=.env scripts/test-admin-adapter.mjs",
+    "test:files": "node --experimental-strip-types scripts/test-files.mjs",
+    "test:edge": "node --env-file-if-exists=.env scripts/test-edge-functions.mjs",
+    "check:files": "node --env-file-if-exists=.env scripts/check-files.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.117.3",
+    "express": "^4.21.2",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "jsdom": "^30.1.2"
+  }
 }

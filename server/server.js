@@ -80,6 +80,16 @@ app.get("/admin-assets/admin.css", (_req, res) => {
   res.type("text/css").sendFile(join(here, "public", "admin.css"));
 });
 app.get("/admin-assets/signature-pad.js", (_req, res) => res.sendFile(join(here, "public", "signature-pad.js")));
+/* Ces deux fichiers doivent venir de la source, comme les précédents. Servis
+   depuis le dossier généré, ils restaient figés après une correction : le
+   navigateur affichait alors une erreur déjà réparée, et la copie périmée
+   servait de preuve trompeuse. */
+app.get("/admin-assets/admin-api.js", (_req, res) =>
+  res.setHeader("Cache-Control", "no-cache").type("text/javascript").sendFile(join(here, "public", "admin-api.js"))
+);
+app.get("/admin-assets/admin-config.js", (_req, res) =>
+  res.setHeader("Cache-Control", "no-cache").type("text/javascript").sendFile(join(here, "public", "admin-config.js"))
+);
 /* Posé dans <head> avant le premier rendu, pour éviter le clignotement de thème. */
 app.get("/admin-assets/theme.js", (_req, res) =>
   res.setHeader("Cache-Control", "no-cache").type("text/javascript").sendFile(join(here, "public", "theme.js"))
