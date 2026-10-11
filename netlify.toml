@@ -33,6 +33,11 @@
   to = "/admin/index.html"
   status = 200
 
+[[redirects]]
+  from = "/doc-assets/*"
+  to = "/admin-assets/:splat"
+  status = 200
+
 # Le back-office n'est pas destiné aux moteurs de recherche.
 [[headers]]
   for = "/admin/*"

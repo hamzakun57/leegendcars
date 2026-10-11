@@ -39,6 +39,12 @@ for (const nom of ["admin.css", "admin.js", "admin-api.js", "admin-config.js", "
 }
 console.log("admin-assets/ — ressources du back-office");
 
+await mkdir(p("doc-assets"), { recursive: true });
+for (const nom of ["doc-print.js", "signature-pad.js", "sign-page.js"]) {
+  await copyFile(p("server", "public", nom), p("doc-assets", nom));
+}
+console.log("doc-assets/ — scripts pour documents imprimables");
+
 /* ---------- 3. les pages d'administration ---------- */
 await mkdir(p("admin"), { recursive: true });
 await writeFile(p("admin", "index.html"), adminShell(), "utf8");

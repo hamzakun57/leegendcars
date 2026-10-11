@@ -44,4 +44,5 @@ npm-debug.log*
 admin/index.html
 admin/login.html
 admin-assets/
+doc-assets/
 vendor/

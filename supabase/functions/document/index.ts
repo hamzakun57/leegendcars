@@ -39,8 +39,24 @@ Deno.serve((requete) =>
       dossier.contract_number = dossier.ref;
       dossier.contractNumber = dossier.ref;
     } else if (facture && !dossier.invoice_number) {
-      const { data: numero, error } = await client.rpc("next_invoice_number");
-      if (error) throw error;
+      let numero = "";
+      try {
+        const { data: n, error } = await client.rpc("next_invoice_number");
+        if (!error && n) numero = String(n);
+      } catch (e) {
+        console.warn("RPC next_invoice_number a échoué:", e);
+      }
+
+      if (!numero) {
+        const annee = new Date().getFullYear();
+        const { count } = await client
+          .from("reservations")
+          .select("id", { count: "exact", head: true })
+          .not("invoice_number", "is", null);
+        const seq = (count || 0) + 1;
+        numero = `F${annee}-${String(seq).padStart(4, "0")}`;
+      }
+
       await client.from("reservations").update({ invoice_number: numero, updated_at: maintenant }).eq("id", id);
       dossier.invoice_number = numero;
       dossier.invoiceNumber = numero;

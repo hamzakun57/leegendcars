@@ -219,7 +219,7 @@ export function invoiceHtml(r, vehicle) {
 </head>
 <body>
   <div class="fv-bar">
-    <button type="button" data-print>Enregistrer en PDF</button>
+    <button type="button" data-print onclick="window.print()">Enregistrer en PDF</button>
     <span class="fv-hint">Dans la fenêtre d'impression : <b>Destination « Enregistrer au format PDF »</b> ·
       <b>Format A4</b> · <b>Marges « Par défaut »</b> · <b>décochez « En-têtes et pieds de page »</b>.</span>
     <a href="/admin" target="_blank">Retour à l'admin</a>
