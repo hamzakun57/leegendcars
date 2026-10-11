@@ -3,7 +3,7 @@
    les routes, puis supprime tout ce qu'il a créé. */
 import { randomBytes } from "node:crypto";
 import { hashPassword } from "../server/auth.js";
-import { createUser, deleteUser } from "../server/db.js";
+import { createUser, deleteUser, deleteVehicle, insertVehicle, listVehicles } from "../server/db.js";
 import { closeDb, query } from "../server/pg.js";
 
 const B = process.env.TEST_URL || "http://127.0.0.1:3199";
@@ -35,7 +35,17 @@ const json = async (r) => { try { return await r.json(); } catch { return {}; } 
 /* petit PNG 1x1 */
 const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
 
+/* Comptes laissés par une exécution interrompue : on les retire avant de créer
+   le nôtre, sinon la connexion échoue et « comptes restants » ment. */
+await query("delete from users where username like 'test\\_%' or username like 'mnt\\_%' or username like 'verif\\_%'");
 await createUser(USER, hashPassword(PASS));
+
+/* Le parc peut être vide : l'agence commence sa saisie et le serveur n'importe
+   plus de véhicules de démonstration. La suite crée alors sa propre voiture de
+   travail, qu'elle supprime à la fin — sinon il n'y aurait rien à tester. */
+const testSlug = (await listVehicles({ includeInactive: false })).length
+  ? null
+  : (await insertVehicle({ slug: `essai-${TAG}`, name: `Essai ${TAG}`, price_from: 500 })).slug;
 
 try {
   /* ---------- public ---------- */
@@ -74,12 +84,12 @@ try {
   check("GET /api/admin/reservations", liste.reservations.length === avant.total, `${liste.reservations.length} lignes`);
   const filtre = await json(await req("GET", "/api/admin/reservations?status=confirmee"));
   check("filtre par statut", filtre.reservations.every((r) => r.status === "confirmee"), `${filtre.reservations.length} confirmees`);
-  /* La recherche doit ignorer la casse : on compare les deux écritures d'un même
-     nom plutôt que de figer un nombre, qui change dès qu'une réservation réelle
-     est ajoutée. */
-  const min = await json(await req("GET", "/api/admin/reservations?q=kaissouni"));
-  const maj = await json(await req("GET", "/api/admin/reservations?q=KAISSOUNI"));
-  check("recherche insensible a la casse", min.reservations.length === maj.reservations.length && min.reservations.length > 0, `${min.reservations.length} resultats`);
+  /* La recherche doit ignorer la casse : on compare les deux écritures d'un nom
+     que le test vient lui-même de créer, plutôt que de figer un nombre qui
+     changerait dès qu'une réservation réelle est ajoutée. */
+  const min = await json(await req("GET", `/api/admin/reservations?q=public ${TAG}`));
+  const maj = await json(await req("GET", `/api/admin/reservations?q=PUBLIC ${TAG}`));
+  check("recherche insensible a la casse", min.reservations.length === maj.reservations.length && min.reservations.length === 1, `${min.reservations.length} resultat(s)`);
 
   /* Une réservation qui nous appartient : le test ne doit jamais modifier un
      dossier réel, sinon chaque exécution abîme les données du client. */
@@ -189,6 +199,7 @@ try {
     await query(sql, params).catch((e) => console.log(`  ! nettoyage ${nom} : ${e.message}`));
   }
   await query("DELETE FROM users WHERE username = $1", [USER]);
+  if (testSlug) await deleteVehicle(testSlug);
 
   /* Les essais consomment des numéros de facture : on rebat le compteur sur la
      dernière facture réellement attribuée, sinon la numérotation saute. */

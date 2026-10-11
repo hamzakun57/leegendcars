@@ -7,7 +7,7 @@ import {
   listMaintenance, listReservations, listVehicles, MAINTENANCE_KINDS, markMaintenanceDone, nextInvoiceNumber,
   saveSignature, setPassword, updateClient, updateMaintenance, updateReservation, updateVehicle, vehicleStats,
 } from "./db.js";
-import { deletePhoto, deleteStored, DOC_KINDS, MAX_PHOTOS, saveDocument, savePhoto } from "./uploads.js";
+import { deletePhoto, deleteStored, DOC_KINDS, MAX_PHOTOS, MAX_REQUEST_BYTES, saveDocument, savePhoto, tailleLot } from "./uploads.js";
 import { contractHtml } from "./contract.js";
 import { invoiceHtml } from "./invoice.js";
 import {
@@ -407,6 +407,15 @@ api.post("/admin/reservations/:id/attachments", requireAdmin, h(async (req, res)
   const name = str(req.body?.name, 120);
   const files = Array.isArray(req.body?.files) ? req.body.files : [];
 
+  /* Refus global avant tout enregistrement : la plateforme (Netlify) coupe les
+     requêtes trop lourdes sans message exploitable, et l'agent comprendrait
+     mal un échec à mi-parcours. */
+  if (tailleLot(files) > MAX_REQUEST_BYTES) {
+    return res.status(413).json({
+      error: `Envoi trop lourd (max ${Math.round(MAX_REQUEST_BYTES / 1048576)} Mo de fichiers par envoi). Réduisez le nombre ou la taille des pièces.`,
+    });
+  }
+
   const errors = [];
   for (const dataUrl of files.slice(0, 6)) {
     try {
@@ -531,7 +540,6 @@ const photoPath = (p) => (typeof p === "string" ? p : p?.publicPath || p?.stored
 /** Transforme les photos base64 en fichiers et renvoie la galerie complète. */
 async function buildGallery(body, current = []) {
   const kept = Array.isArray(body.keepPhotos) ? body.keepPhotos.filter(isSafeImagePath) : null;
-  const added = Array.isArray(body.photos) ? body.photos : [];
   /* Les galleries plus anciennes peuvent contenir des objets (retour de
      savePhoto) : on ne manipule que des chemins. */
   const currentPaths = current.map(photoPath).filter(Boolean);
@@ -550,7 +558,11 @@ async function buildGallery(body, current = []) {
   if (body.keepPhotos && kept.length !== body.keepPhotos.length) {
     errors.push("certains chemins de photo ont été ignorés (format non autorisé)");
   }
-  for (const dataUrl of added.slice(0, MAX_PHOTOS)) {
+  const ajoutees = Array.isArray(body.photos) ? body.photos : [];
+  if (tailleLot(ajoutees) > MAX_REQUEST_BYTES) {
+    return { gallery, errors: [...errors, `Photos trop lourdes (max ${Math.round(MAX_REQUEST_BYTES / 1048576)} Mo par envoi)`] };
+  }
+  for (const dataUrl of ajoutees.slice(0, MAX_PHOTOS)) {
     try {
       gallery.push(photoPath(await savePhoto(dataUrl)));
     } catch (e) {

@@ -2,35 +2,41 @@ const esc = (s) =>
   String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 
+const THEME_TOGGLE = `<button type="button" data-theme-toggle class="btn ghost" aria-pressed="false" title="Passer en thème clair"><span data-icone>☾</span></button>`;
+
 const loginShell = (body) => `<!doctype html>
 <html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <title>Administration — Leegend Cars</title>
-<link rel="stylesheet" href="/admin-assets/admin.css"></head>
+<link rel="stylesheet" href="/admin-assets/admin.css">
+<script src="/admin-assets/admin-config.js"></script>
+<script src="/vendor/supabase.bundle.js"></script>
+<script src="/admin-assets/theme.js"></script></head>
 <body><div class="wrap login">${body}</div></body></html>`;
 
 export const loginPage = (needsSetup) =>
   loginShell(`
     <div class="login__card panel">
-      <div class="brand"><span class="brand__mark">LC</span>Leegend <span>Cars</span></div>
-      <h1>${needsSetup ? "Première connexion" : "Connexion"}</h1>
-      <p class="sub">${needsSetup ? "Créez le compte administrateur de cet espace." : "Espace d'administration de la location."}</p>
+      <div class="row" style="justify-content:space-between;align-items:center">
+        <div class="brand"><span class="brand__mark">LC</span>Leegend <span>Cars</span></div>
+        ${THEME_TOGGLE}
+      </div>
+      <h1>Connexion</h1>
+      <p class="sub">Espace d'administration de la location.</p>
       <div id="msg"></div>
-      <form id="f" autocomplete="off">
-        <label for="u">Identifiant</label>
-        <input id="u" name="username" autocomplete="username" required autofocus>
+      <form id="f" autocomplete="on">
+        <label for="u">Adresse e-mail</label>
+        <input id="u" name="username" type="email" autocomplete="username" required autofocus
+               placeholder="vous@exemple.ma">
         <label for="p">Mot de passe</label>
-        <input id="p" name="password" type="password" autocomplete="${needsSetup ? "new-password" : "current-password"}" required>
-        ${needsSetup ? '<label for="p2">Confirmer le mot de passe</label><input id="p2" type="password" autocomplete="new-password" required>' : ""}
+        <input id="p" name="password" type="password" autocomplete="current-password" required>
         <button class="primary" style="width:100%;margin-top:20px" type="submit">
-          ${needsSetup ? "Créer le compte" : "Se connecter"}
+          Se connecter
         </button>
       </form>
       <p class="faint" style="margin-top:20px;text-align:center">
-        ${needsSetup
-          ? "Mot de passe : 8 caractères minimum. Cette page ne sera plus accessible ensuite."
-          : 'Session limitée à 12 heures. <a href="/" style="color:var(--red)">Retour au site</a>'}
+        Session limitée à 12 heures. <a href="/" style="color:var(--red)">Retour au site</a>
       </p>
     </div>
     <script src="/admin-assets/login.js"></script>
@@ -40,13 +46,15 @@ const adminShell = () => `<!doctype html>
 <html lang="fr"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
-<title>Administration — Leegend Cars</title><link rel="stylesheet" href="/admin-assets/admin.css"></head>
+<title>Administration — Leegend Cars</title><link rel="stylesheet" href="/admin-assets/admin.css">
+<script src="/admin-assets/theme.js"></script></head>
 <body>
 <header class="top"><div class="wrap">
   <div class="brand"><span class="brand__mark">LC</span>Leegend <span>Cars</span> <span class="pill">admin</span></div>
   <div class="row" style="margin-left:auto">
     <span class="faint" id="who"></span>
     <a class="btn ghost" href="/" target="_blank">Voir le site</a>
+    ${THEME_TOGGLE}
   </div>
 </div></header>
 
@@ -236,6 +244,9 @@ const adminShell = () => `<!doctype html>
     </div>
   </main>
 </div>
+<script src="/admin-assets/admin-config.js"></script>
+<script src="/vendor/supabase.bundle.js"></script>
+<script src="/admin-assets/admin-api.js"></script>
 <script src="/admin-assets/signature-pad.js"></script>
 <script src="/admin-assets/admin.js"></script>
 </body></html>`;

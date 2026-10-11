@@ -12,6 +12,19 @@
     mapsUrl: "https://www.google.com/maps/search/?api=1&query=Tanger%2C%20Maroc",
     hours: "7j/7 · 24h/24",
     year: new Date().getFullYear(),
+
+    /* Source des données : « supabase » (le navigateur interroge Supabase),
+       « api » (un serveur Express répond) ou « auto » (Supabase s'il est
+       configuré, le serveur sinon). Les deux marches sont maintenues : rien ne
+       disparaît, on change seulement qui répond. */
+    source: "auto",
+
+    /* Clé publique : conçue pour être lue par le navigateur. Ce n'est pas un
+       secret — c'est ce qui permet d'appeler Supabase sans serveur. Ce qui
+       protège les données, ce sont les règles d'accès (RLS) de la base, pas
+       cette clé. La clé « service_role » ne doit JAMAIS être écrite ici. */
+    supabaseUrl: "https://dqygspzmndcsbkxeiulm.supabase.co",
+    supabaseAnonKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxeWdzcHptbmRjc2JreGVpdWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE2NTkyODEsImV4cCI6MjEwNzIzNTI4MX0.2Xw305r5GJtBn85tnVPFs8MCLgJuiPLK9gnSSmu2pZI",
   };
 
   const NAV = [

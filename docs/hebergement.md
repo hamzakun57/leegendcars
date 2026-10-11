@@ -1,79 +1,97 @@
-# Hébergement — Supabase (données) + Node Express (application)
-
-Le site ne peut pas être hébergé sur Netlify : Netlify ne sert que des fichiers
-statiques, or l'application a besoin d'un serveur Express pour `/admin`,
-`/api/*`, les contrats et les pièces jointes.
-
-## Où va quoi
-
-| Donnée | Stockage | Pourquoi |
-|---|---|---|
-| Réservations, clients, véhicules | Supabase PostgreSQL | Survit aux redémarrages et aux déploiements |
-| Photos de véhicules, CIN, permis, contrats | Supabase Storage (`uploads`) | Idem, 1 Go offerts |
-| Session administrateur | Cookie signé + table `users` | — |
-| PDF contrat / facture | Générés à la volée en HTML | Le navigateur imprime : aucun Chromium à héberger |
-
-Supabase ne sert pas le code Node : il faut **en plus** un hébergeur qui exécute
-`npm start`. C'est Render dans la configuration ci-dessous.
-
-## 1. Base et stockage (déjà fait une fois)
-
-```bash
-npm run db:setup      # crée les tables + le bucket « uploads »
-npm run migrate:sqlite   # importe l'ancien fichier SQLite (une seule fois)
-```
-
-`db:setup` est idempotent : on peut le relancer sans risque.
-
-## 2. Variables d'environnement
-
-Le fichier `.env` (ignoré par Git) sert en local ; les mêmes variables se
-déclarent chez l'hébergeur. Les 4 valeurs viennent du dashboard Supabase.
-
-| Variable | Origine |
-|---|---|
-| `DATABASE_URL` | Project Settings › Database › Connection string › **URI** (mode *Session pooler*) |
-| `SUPABASE_URL` | Project Settings › API › **Project URL** |
-| `SUPABASE_SERVICE_ROLE_KEY` | Project Settings › API › **service_role** |
-| `SESSION_SECRET` | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
-
-`NODE_ENV=production` et `HOST=0.0.0.0` sont ajoutés par `render.yaml`.
-
-⚠️ `SESSION_SECRET` doit être **identique** entre les environnements, sinon les
-sessions ouvertes d'un côté ne sont pas reconnues de l'autre. Ne jamais le
-versionner ni le coller dans un chat.
-
-## 3. Mise en ligne sur Render
-
-1. Pousser le dépôt sur GitHub.
-2. Render → **New** → **Blueprint** → choisir le dépôt.
-3. Renseigner `DATABASE_URL`, `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
-   (`sync: false` = Render les demandera). `SESSION_SECRET` est généré.
-4. Déployer. Premier démarrage lent (build + import de la flotte si vide).
-
-Le plan gratuit s'endort après 15 min d'inactivité ; la première visite attend
-environ 50 s. Les données ne sont pas perdues pour autant : elles vivent dans
-Supabase.
-
-## 4. Après la mise en ligne
-
-- Vérifier `https://<sous-domaine>/api/vehicles` → la flotte s'affiche.
-- Créer le compte admin sur `/admin` (page de premier lancement).
-- Brancher le domaine : dans Render, `Settings` → `Custom Domains`.
-- Supabase → `Authentication` → `URL Configuration` → ajouter l'URL publique
-  dans *Site URL* et *Redirect URLs*.
-
-## Sécurité en place
-
-- RLS activée sur toutes les tables, sans policy : la clé `anon` ne peut lire
-  aucune donnée via l'API Supabase ; seul le serveur (rôle `postgres`) y accède.
-- Bucket `uploads` privé ; les fichiers sont servis par une route Express.
-- `/server/*`, `/.env`, `/node_modules/*` bloqués par le serveur.
-- CSP stricte, `X-Frame-Options`, cookies `httpOnly` + `sameSite=strict`.
-
-## Si le bucket est mal configuré
-
-L'application bascule sur le disque local (`STORAGE_MODE=local`) quand
-`SUPABASE_URL` ou `SUPABASE_SERVICE_ROLE_KEY` manquent : le site fonctionne,
-mais les fichiers uploaded disparaissent au redémarrage. La ligne
-`Stockage  Supabase Storage` au démarrage du serveur indique le mode actif.
+# ============================================================================
+# Leegend Cars — hébergement
+# ============================================================================
+# Le site est désormais « client-first » :
+#
+#   Netlify          sert les fichiers (site public + back-office)
+#   Supabase Auth    authentifie l'administrateur
+#   Supabase Postgres  les données
+#   Supabase Storage   les fichiers (photos, CIN, contrats)
+#   Supabase Edge Functions  ce qui doit rester côté serveur :
+#                     envoi de fichiers, contrat, facture, signature à distance
+#
+# Le serveur Express (dossier server/) est conservé et fonctionne toujours :
+# il sert au développement local et sert de filet si un hébergeur Node est
+# préféré. L'interface choisit son chemin toute seule, sans changer d'écran.
+#
+# ---------------------------------------------------------------------------
+# 1. Préparer la base
+# ---------------------------------------------------------------------------
+#   npm run db:setup      # tables + règles d'accès + fonctions SQL
+#   npm run db:setup      # idempotent : relançable sans risque
+#
+# 2. Compte administrateur
+# ---------------------------------------------------------------------------
+#   node scripts/create-admin.mjs leegend.cars099@gmail.com
+#   → affiche un mot de passe généré, affiché une seule fois
+#
+# 3. Construire les fichiers statiques
+# ---------------------------------------------------------------------------
+#   npm run build
+#   Produit : vendor/supabase.bundle.js, admin-assets/, admin/index.html,
+#   admin/login.html et les gabarits de documents pour les Edge Functions.
+#   Les pages d'administration sont générées depuis server/views.js : il n'y a
+#   donc qu'une seule version de l'écran.
+#
+# 4. Déployer les Edge Functions
+# ---------------------------------------------------------------------------
+#   npm install -g supabase
+#   supabase login
+#   supabase link --project-ref dqygspzmndcsbkxeiulm
+#   supabase functions deploy upload
+#   supabase functions deploy document
+#   supabase functions deploy signature
+#
+# 5. Déployer le site sur Netlify
+# ---------------------------------------------------------------------------
+#   git push          # Netlify déclenche « npm run build » automatiquement
+#
+# Aucune variable d'environnement n'est nécessaire chez Netlify : la seule
+# clé présente dans le navigateur est la clé publique « anon », et elle ne
+# donne aucun droit — les règles d'accès (supabase/policies.sql) décident de
+# tout. La clé « service_role » reste exclusivement dans les Edge Functions,
+# où Supabase la fournit automatiquement.
+#
+# ---------------------------------------------------------------------------
+# Où va quoi
+# ---------------------------------------------------------------------------
+# | Élément            | Stockage                                  |
+# |--------------------|-------------------------------------------|
+# | Flotte             | table vehicles                            |
+# | Réservations       | table reservations (+ payments, attachments)|
+# | Clients            | table clients                             |
+# | Maintenance        | table maintenance                         |
+# | Photos, CIN, PDF   | bucket Storage « uploads »                 |
+# | Connexion admin    | Supabase Auth + table admin_accounts       |
+# | Contrats, factures | Edge Function « document »                 |
+# | Signature          | Edge Function « signature »                |
+#
+# ---------------------------------------------------------------------------
+# Sécurité en place
+# ---------------------------------------------------------------------------
+# - RLS activée sur toutes les tables, sans policy pour le rôle « anon ».
+# - Un visiteur ne peut que lire la flotte active et envoyer une demande.
+# - Un déclencheur force toute demande entrante à « nouvelle » : ni statut,
+#   ni numéro de facture, ni encaissement, ni signature ne peuvent être
+#   usurpés, même avec la clé publique.
+# - Un compte connecté non administrateur n'accède à rien de plus.
+# - Les Edge Functions exigent un administrateur authentifié, sauf la
+#   signature, protégée par un jeton de 24 octets aléatoires.
+# - Les fichiers sont validés sur leur signature binaire, jamais sur leur
+#   nom : un script renommé en .jpg est refusé.
+#
+# ---------------------------------------------------------------------------
+# Vérifier que tout va bien
+# ---------------------------------------------------------------------------
+#   npm test        # 238 contrôles sur les 9 suites
+#
+# Chaque suite est autonome et nettoie ce qu'elle a créé.
+#
+# ---------------------------------------------------------------------------
+# Répartition des modes
+# ---------------------------------------------------------------------------
+# assets/js/data.js       CFG.source : « supabase » ou « api »
+# server/public/admin-config.js   idem pour le back-office
+#
+# « auto » utilise Supabase s'il est configuré, le serveur sinon.
+#

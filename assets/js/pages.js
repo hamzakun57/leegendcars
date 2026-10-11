@@ -266,7 +266,7 @@ const locations = (selected) =>
           <h2 class="section__title">Choisissez votre voiture, partout au Maroc</h2>
           <p class="section__sub">3 modèles premium entretenus, propres et prêts. Un prix clair par jour, livraison gratuite à l'aéroport.</p>
         </div>
-        <div class="vehicles">${D.VEHICLES.map(vehicleCard).join("")}</div>
+        <div class="vehicles">${D.VEHICLES.length ? D.VEHICLES.map(vehicleCard).join("") : emptyFleet()}</div>
         <div class="vehicles__more" data-reveal>
           <a class="btn btn--ghost" href="#/vehicules">Voir tous nos véhicules ${I.arrowRight()}</a>
         </div>
@@ -469,9 +469,18 @@ const locations = (selected) =>
           <h1>Tous nos véhicules</h1>
           <p class="lead">Citadines premium, SUV et berlines, entretenus, propres et prêts pour les aéroports du Maroc, vos hôtels ou le centre-ville. Tarifs dès 299 MAD/jour, prix final selon dates et durée.</p>
         </div>
-        <div class="vehicles">${D.VEHICLES.map(vehicleCard).join("")}</div>
+        <div class="vehicles">${D.VEHICLES.length ? D.VEHICLES.map(vehicleCard).join("") : emptyFleet()}</div>
       </div>
     </section>`;
+
+  /* Le parc peut être vide : l'agence n'a pas encore saisi ses voitures.
+     Préférer un message honnête à une page vide ou à des véhicules de
+     démonstration qui n'existent pas. */
+  const emptyFleet = () => `<div class="empty-fleet">
+      <b>Aucun véhicule disponible pour le moment</b>
+      Notre flotte est en cours de mise à jour. Écrivez-nous, nous vous dirons
+      ce que nous avons en garage.
+    </div>`;
 
   /* ================= DÉTAIL VÉHICULE ================= */
   const vehicleDetail = (slug) => {
@@ -706,8 +715,9 @@ primary: `<a class="btn btn--primary" href="#/vehicules">${I.arrowRight()} Rése
           <p class="section__sub">Tarifs indicatifs en MAD/jour (≈ EUR). Le tarif définitif est confirmé par écrit avant validation.</p>
         </div>
         <div class="price-cards">
-          ${D.VEHICLES.map(
-            (v) => `
+          ${D.VEHICLES.length
+            ? D.VEHICLES.map(
+                (v) => `
             <article class="price-card" data-reveal>
               <div class="price-card__media">
                 <img src="${v.gallery[0]}" alt="${v.name}" loading="lazy" />
@@ -719,7 +729,8 @@ primary: `<a class="btn btn--primary" href="#/vehicules">${I.arrowRight()} Rése
                 <a class="btn btn--ghost btn--sm" href="#/vehicules/${v.slug}">Voir le détail ${I.arrowRight()}</a>
               </div>
             </article>`
-          ).join("")}
+              ).join("")
+            : emptyFleet()}
         </div>
 
         <div class="section__head" style="margin-top:var(--space-16)" data-reveal>
@@ -980,7 +991,8 @@ primary: callBtn(" Poser ma question"),
       r = null;
     }
     if (!r) return null;
-    const v = D.VEHICLES.find((x) => x.name === r.vehicle) || D.VEHICLES[0];
+    /* Parc vide : le récapitulatif s'affiche quand même, sans la fiche véhicule. */
+    const v = D.VEHICLES.find((x) => x.name === r.vehicle) || D.VEHICLES[0] || null;
     const fmt = (d) =>
       d
         ? new Date(d + "T00:00:00").toLocaleDateString("fr-FR", {
@@ -1027,13 +1039,18 @@ primary: callBtn(" Poser ma question"),
               <h2 style="font-size:var(--fs-lg)">Récapitulatif de votre demande</h2>
               <span class="badge">À confirmer</span>
             </div>
-            <div class="price-card__media" style="border-radius:var(--radius-sm)">
+            ${
+              v
+                ? `<div class="price-card__media" style="border-radius:var(--radius-sm)">
               <img src="${v.gallery[0]}" alt="${v.name}" style="height:110px" />
             </div>
             <div>
               <b style="color:var(--white)">${v.name}</b>
               <p class="note">dès ${money(v.priceFrom)} MAD / jour · caution ${money(v.deposit)} MAD</p>
-            </div>
+            </div>`
+                : `<div><b>${r.vehicle || "Véhicule"}</b>
+              <p class="note">Tarif définitif confirmé par l'agence.</p></div>`
+            }
             <div class="recap__row"><span>Client</span><b>${r.firstName} ${r.lastName}</b></div>
             <div class="recap__row"><span>Téléphone</span><b>${r.countryCode} ${r.phone}</b></div>
             ${r.licenceNumber ? `<div class="recap__row"><span>Permis</span><b>${r.licenceNumber}${r.licenceDate ? ` · ${fmt(r.licenceDate)}` : ""}</b></div>` : ""}

@@ -464,16 +464,12 @@
           submitBtn.innerHTML = "Envoi en cours…";
         }
 
-        fetch("/api/reservations", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        })
-          .then((res) =>
-            res.json().then((data) => ({ ok: res.ok, data }))
-          )
-          .then(({ ok, data }) => {
-            if (!ok) {
+        /* Passe par LCData : selon la configuration, la demande part vers le
+           serveur Express ou directement vers Supabase. Le formulaire ne fait
+           aucune différence entre les deux. */
+        window.LCData.envoyerReservation(payload)
+          .then((data) => {
+            if (!data.ok) {
               setAlert(data.error || "Votre demande n'a pas pu être envoyée. Merci de réessayer.");
               (data.fields || []).forEach((f) => setFieldError(get(f), "Champ invalide."));
               submitBtn.disabled = false;
@@ -562,18 +558,24 @@
   window.addEventListener("hashchange", render);
 
   /* ---------- boot ---------- */
-  /* La flotte affichée vient de l'admin : on relit /api/vehicles avant le
-     premier rendu, pour qu'un véhicule ajouté depuis le back-office apparaisse
-     immédiatement sur le site. En cas d'échec, on garde la liste de secours
-     inscrite dans data.js. */
+  /* La flotte affichée vient de l'admin : on la relit avant le premier rendu,
+     pour qu'un véhicule ajouté depuis le back-office apparaisse immédiatement
+     sur le site. En cas d'échec, on garde la liste de secours inscrite dans
+     data.js. */
   async function loadFleet() {
     try {
-      const res = await fetch("/api/vehicles", { cache: "no-store" });
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const data = await res.json();
-      if (!Array.isArray(data.vehicles) || !data.vehicles.length) return;
+      const data = await window.LCData.vehicles();
+      /* Réponse inattendue : on ne touche à rien et la liste de secours reste. */
+      if (!Array.isArray(data.vehicles)) return;
+      /* Une liste vide, elle, veut dire « le parc est vide » : c'est l'état réel
+         de l'agence quand elle n'a encore saisi aucune voiture. Afficher les
+         véhicules de démonstration de data.js serait mensonger. */
+      if (!data.vehicles.length) {
+        D.VEHICLES = [];
+        return;
+      }
 
-      /* Un véhicule tout juste créé n'a pas toujours de prix, de photos ou de
+      /* Un véhicule tout juste créé n'a pas toujours un prix, des photos ou du
          texte. On ne remplace donc une valeur que si elle est renseignée, et on
          garde la valeur de secours du même modèle pour le reste. */
       const secours = new Map((D.VEHICLES || []).map((v) => [v.slug, v]));

@@ -34,3 +34,13 @@ desktop.ini
 # Journaux
 *.log
 npm-debug.log*
+# ---------------------------------------------------------------------------
+# Fichiers générés par « npm run build » à partir de server/views.js et de
+# server/public/. Versionnés automatiquement par le build Netlify : les garder
+# hors dépôt évite deux versions de la même page.
+# ---------------------------------------------------------------------------
+admin/index.html
+admin/login.html
+admin-assets/
+vendor/
+assets/vendor/

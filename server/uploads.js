@@ -39,7 +39,12 @@ const MIME_BY_EXT = {
 export const MAX_PHOTO_BYTES = 5 * 1024 * 1024; // 5 Mo par photo
 export const MAX_PHOTOS = 12;
 /* Pièces jointes du dossier (permis, contrat…) : documents, formats plus larges. */
-export const MAX_DOC_BYTES = 15 * 1024 * 1024; // 15 Mo
+export const MAX_DOC_BYTES = 5 * 1024 * 1024; // 5 Mo
+/* Plafond global d'un envoi. Sur Netlify, une requête est coupée à 6 Mo et le
+   base64 ajoute ~30 % : 4 Mo de fichiers, c'est la marge réaliste. Les photos
+   sont réduites dans le navigateur avant l'envoi, donc ce plafond ne bloque que
+   les PDF très lourds. */
+export const MAX_REQUEST_BYTES = 4 * 1024 * 1024;
 export const DOC_KINDS = ["piece", "contrat", "facture", "permis"];
 
 /* ---------- Supabase Storage (REST) ---------- */
@@ -77,13 +82,28 @@ async function sbDelete(key) {
 }
 
 /**
- * Enregistre une photo envoyée en base64 (data URL ou base64 nu).
+ * Taille totale, en octets, d'un lot de fichiers encodés en base64. Utilisé
+ * pour refuser un envoi trop lourd avant de commencer à écrire quoi que ce
+ * soit : sur Netlify la requête serait refusée par la plateforme, sans
+ * message utile, en plein milieu d'un envoi de plusieurs CIN.
+ */
+export function tailleLot(dataUrls = []) {
+  return dataUrls.reduce((total, d) => {
+    const s = typeof d === "string" ? d : "";
+    const i = s.indexOf(",");
+    const base64 = (i >= 0 ? s.slice(i + 1) : s).replace(/\s/g, "");
+    if (!base64) return total;
+    const remplissage = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+    return total + Math.floor((base64.length * 3) / 4) - remplissage;
+  }, 0);
+}
+
+/** Une photo envoyée en base64 (data URL ou base64 nu).
  * @returns {Promise<{storedName:string, publicPath:string, mime:string, size:number}>}
  */
 export function savePhoto(dataUrl) {
   return saveImage(dataUrl, MAX_PHOTO_BYTES);
 }
-
 /** Pièce jointe du dossier : accepte les images + PDF.
  *  Toutes les pièces d'une réservation vont dans uploads/reservations/ ;
  *  le type (contrat, facture, permis…) est une colonne en base, pas un dossier. */
@@ -105,7 +125,7 @@ async function saveImage(dataUrl, maxBytes, subdir = "", allowPdf = false) {
   }
   if (!buf.length) throw new Error("fichier vide");
   if (buf.length > maxBytes) {
-    throw new Error(`fichier trop lourd (max ${Math.round(maxBytes / 1048576)} Mo)`);
+    throw new Error(`fichier trop lourd (max ${Math.round(maxBytes / 1048576)} Mo par fichier)`);
   }
 
   const sig = SIGNATURES.find((s) => s.test(buf));

@@ -1,15 +1,22 @@
 /* Tests de la page Maintenance (vignette, assurance, vidange…).
    Crée ses propres entrées et les supprime : aucune donnée réelle n'est touchée.
    Usage : npm run test:maintenance (le serveur doit tourner sur TEST_URL) */
+import { randomBytes } from "node:crypto";
 import { hashPassword } from "../server/auth.js";
 import { createUser, deleteUser } from "../server/db.js";
 import { closeDb, query } from "../server/pg.js";
 
 const B = process.env.TEST_URL || "http://127.0.0.1:3199";
-const USER = "verif_mnt";
+/* Nom aléatoire + suppression préalable : une exécution interrompue ne laisse
+   jamais un compte fantôme qui fasse échouer la suivante. */
+const USER = "mnt_" + randomBytes(3).toString("hex");
 let pass = 0, fail = 0;
 const check = (n, ok, extra = "") => { console.log(`${ok ? "  OK  " : "ECHEC"} ${n}${extra ? " — " + extra : ""}`); ok ? pass++ : fail++; };
 
+/* Balayage des comptes laissés par une exécution interrompue : sans cela, une
+   suite relancée après un échec bute sur un identifiant déjà pris. Le compte
+   « admin » n'est jamais touché. */
+await query("delete from users where username like 'mnt\\_%' or username like 'test\\_%' or username like 'verif\\_%'");
 await createUser(USER, hashPassword("temp-test-1234"));
 const r = await fetch(`${B}/api/admin/login`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ username: USER, password: "temp-test-1234" }) });
 const cookie = r.headers.getSetCookie()[0].split(";")[0];
@@ -19,7 +26,18 @@ const call = async (m, p, b) => {
   return { status: res.status, data: await res.json().catch(() => ({})) };
 };
 const jours = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
-const slug = (await (await fetch(B + "/api/vehicles")).json()).vehicles[0].slug;
+
+/* Si le parc est vide (agence qui démarre), la suite crée une voiture de travail
+   et la supprime à la fin : sinon il n'y aurait rien contre quoi tester. */
+const parc = (await (await fetch(B + "/api/vehicles")).json()).vehicles;
+let slug = parc[0]?.slug || null;
+let vehiculeCree = null;
+if (!slug) {
+  const vh = await call("POST", "/api/admin/vehicles", { name: `Essai MNT ${USER}`, price_from: 100 });
+  if (!vh.data.ok) throw new Error("impossible de créer le véhicule de test : " + JSON.stringify(vh.data));
+  slug = vh.data.vehicle.slug;
+  vehiculeCree = slug;
+}
 const crees = [];
 
 try {
@@ -103,7 +121,7 @@ try {
   check("suivis supprimes avec le vehicule", apres.data.items.every((m) => m.vehicle_slug !== vtest.data.vehicle.slug));
 } finally {
   for (const id of crees) await call("DELETE", `/api/admin/maintenance/${id}`);
-  await query("delete from maintenance where vehicle_slug in (select slug from vehicles where name like 'Essai MNT%')");
+  if (vehiculeCree) await call("DELETE", `/api/admin/vehicles/${vehiculeCree}`);
   await query("DELETE FROM users WHERE username = $1", [USER]);
   const reste = await query("select count(*)::int AS n FROM maintenance");
   console.log(`\n${pass} reussis, ${fail} echecs | suivis restants : ${reste.rows[0].n}`);

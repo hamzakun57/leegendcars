@@ -14,6 +14,20 @@ const sql = await readFile(join(here, "..", "supabase", "schema.sql"), "utf8");
 
 try {
   await pool.query(sql);
+
+  /* Les règles d'accès ne sont appliquées qu'une fois, après la création des
+     tables : elles font référence à des fonctions qui doivent déjà exister. */
+  for (const fichier of ["policies.sql", "functions.sql"]) {
+    try {
+      const sql = await readFile(join(here, "..", "supabase", fichier), "utf8");
+      await pool.query(sql);
+      console.log(`${fichier} applique.`);
+    } catch (e) {
+      console.error(`Echec de ${fichier} :`, e.message);
+      process.exitCode = 1;
+    }
+  }
+
   const { rows } = await pool.query(
     "select table_name from information_schema.tables where table_schema = 'public' order by table_name"
   );

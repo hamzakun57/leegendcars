@@ -20,7 +20,11 @@
 
   let vehicles = [];
 
-  const api = async (url, opts = {}) => {
+  /* ---------- accès aux données ----------
+     Deux Mondays : l'API du serveur Express, ou Supabase en direct. L'écran
+     appelle exactement les mêmes routes dans les deux cas — seul cet appel
+     change. C'est ce qui garantit qu'aucun écran ne bouge. */
+  const viaServeur = async (url, opts = {}) => {
     const res = await fetch(url, {
       headers: opts.body ? { "Content-Type": "application/json" } : {},
       ...opts,
@@ -35,10 +39,63 @@
     return data;
   };
 
+  const api = window.LCAdmin && window.LCAdmin.mode === "supabase"
+    ? (url, opts = {}) =>
+        window.LCAdmin.api(url, opts).catch((e) => {
+          /* Session expirée : Supabase ne renvoie pas 401 mais une session
+             absente. On renvoie l'agent vers l'écran de connexion. */
+          if (/session|token|authent/i.test(e.message || "")) location.href = "/admin/login";
+          throw e;
+        })
+    : viaServeur;
+
   const flash = (text, kind = "ok") => {
     $("#msg").innerHTML = `<div class="${kind}">${esc(text)}</div>`;
     setTimeout(() => ($("#msg").innerHTML = ""), 4000);
   };
+
+  /* ---------- envoi de fichiers : allégé avant d'envoyer ----------
+     Netlify limite chaque requête à 6 Mo, et le passage en base64 ajoute
+     environ 30 %. Une photo de téléphone fait 4 à 8 Mo : refusée telle quelle.
+     On la redimensionne donc dans le navigateur avant l'envoi — une photo de
+     fiche véhicule n'a pas besoin de 4000 px, et 1600 px suffisent pour
+     l'écran comme pour l'impression. */
+  const TAILLE_MAX = 1600;
+  const QUALITE = 0.82;
+
+  /** data URL -> data URL réduite. Renvoie l'original si le navigateur refuse
+      (pas de canvas, format exotique) : la limite serveur reste le filet. */
+  async function reduire(dataUrl) {
+    if (typeof dataUrl !== "string" || !dataUrl.startsWith("data:image/")) return dataUrl;
+    try {
+      const img = await new Promise((res, rej) => {
+        const i = new Image();
+        i.onload = () => res(i);
+        i.onerror = rej;
+        i.src = dataUrl;
+      });
+      const facteur = Math.min(1, TAILLE_MAX / Math.max(img.width, img.height));
+      if (facteur === 1 && dataUrl.length < 700 * 1024) return dataUrl; // déjà raisonnable
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * facteur);
+      canvas.height = Math.round(img.height * facteur);
+      const ctx = canvas.getContext("2d");
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      return canvas.toDataURL("image/jpeg", QUALITE);
+    } catch (e) {
+      return dataUrl;
+    }
+  }
+
+  const lireFichier = (fichier) =>
+    new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = () => rej(new Error(fichier.name));
+      r.readAsDataURL(fichier);
+    });
 
   /* ---------- tiroir : formulaires de saisie ---------- */
   /* Les formulaires longs (client, véhicule, réservation) s'ouvrent dans un
@@ -1332,7 +1389,7 @@
         try {
           await api(`/api/admin/reservations/${r.id}/attachments`, {
             method: "POST",
-            body: { kind: $("#att-kind").value, name: $("#att-name").value || file.name, files: [reader.result] },
+            body: { kind: $("#att-kind").value, name: $("#att-name").value || file.name, files: [await reduire(reader.result)] },
           });
           /* La route renvoie les pièces, pas le dossier : on relit pour que la
              liste affiche réellement le fichier ajouté. */
@@ -1792,15 +1849,10 @@
       if (files.length > room) alert(`Maximum ${room} photo(s) restante(s).`);
       $("#upinfo").textContent = "Lecture des fichiers…";
       Promise.all(
-        files.slice(0, Math.max(0, room)).map(
-          (f) =>
-            new Promise((res, rej) => {
-              const r = new FileReader();
-              r.onload = () => res(r.result);
-              r.onerror = () => rej(new Error(f.name));
-              r.readAsDataURL(f);
-            })
-        )
+        files.slice(0, Math.max(0, room)).map(async (f) => {
+          const brut = await lireFichier(f);
+          return f.type.startsWith("image/") ? reduire(brut) : brut;
+        })
       )
         .then((loaded) => {
           previews.push(...loaded);

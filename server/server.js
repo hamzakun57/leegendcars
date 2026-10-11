@@ -35,11 +35,13 @@ const h = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(
 
 /* Les photos arrivent en base64 dans le JSON. Ce parseur doit passer AVANT le
    parseur global, sinon une photo de plusieurs Mo serait rejetée en 413.
-   body-parser ignore ensuite le corps, déjà décodé (req._body). */
-app.use("/api/admin/vehicles", express.json({ limit: "30mb" }));
-/* Les pièces jointes partent en base64 dans le JSON (max 15 Mo par fichier) :
-   elles Passent très vite au-dessus de la limite générale de 128 ko. */
-app.use(/^\/api\/admin\/reservations\/\d+\/attachments$/, express.json({ limit: "25mb" }));
+   body-parser ignore ensuite le corps, déjà décodé (req._body).
+   Le plafond annoncé ici reste supérieur à notre limite d'envoi (4 Mo de
+   fichiers) : il n'existe que pour absorber le base64 et le reste du JSON. */
+app.use("/api/admin/vehicles", express.json({ limit: "6mb" }));
+/* Les pièces jointes partent en base64 dans le JSON (max 4 Mo de fichiers par
+   envoi, cf. MAX_REQUEST_BYTES) : le JSON dépasse vite la limite générale. */
+app.use(/^\/api\/admin\/reservations\/\d+\/attachments$/, express.json({ limit: "6mb" }));
 app.use(/^\/api\/admin\/reservations\/\d+\/signature$/, express.json({ limit: "2mb" }));
 app.use(/^\/sign\/[\w-]+$/, express.json({ limit: "2mb" }));
 app.use(express.json({ limit: "128kb" }));
@@ -78,6 +80,10 @@ app.get("/admin-assets/admin.css", (_req, res) => {
   res.type("text/css").sendFile(join(here, "public", "admin.css"));
 });
 app.get("/admin-assets/signature-pad.js", (_req, res) => res.sendFile(join(here, "public", "signature-pad.js")));
+/* Posé dans <head> avant le premier rendu, pour éviter le clignotement de thème. */
+app.get("/admin-assets/theme.js", (_req, res) =>
+  res.setHeader("Cache-Control", "no-cache").type("text/javascript").sendFile(join(here, "public", "theme.js"))
+);
 app.get("/doc-assets/doc-print.js", (_req, res) => res.sendFile(join(here, "public", "doc-print.js")));
 app.get("/doc-assets/signature-pad.js", (_req, res) => res.sendFile(join(here, "public", "signature-pad.js")));
 app.get("/doc-assets/sign-page.js", (_req, res) => res.sendFile(join(here, "public", "sign-page.js")));
@@ -184,7 +190,9 @@ app.get("*", (req, res) => {
 app.use((err, req, res, _next) => {
   const isApi = req.path.startsWith("/api/");
   if (err?.type === "entity.too.large") {
-    return res.status(413).json({ error: "Fichier trop volumineux (15 Mo par pièce, 25 Mo par envoi)." });
+    return res
+      .status(413)
+      .json({ error: "Fichier trop volumineux (5 Mo par fichier, 4 Mo par envoi)." });
   }
   if (err instanceof SyntaxError && "body" in err) {
     return res.status(400).json({ error: "Requête invalide." });
@@ -206,9 +214,12 @@ const checkEnv = () => {
 };
 
 /** Base vide (première installation) : on importe la flotte par défaut, sinon
- *  le site s'affiche sans véhicules. */
+ *  le site s'affiche sans véhicules. SEED_FLEET=0 laisse le parc vide à
+ *  remplir — utile quand l'application est partagée avec une agence qui gère
+ *  elle-même ses propres voitures. */
 async function ensureFleet() {
   try {
+    if (process.env.SEED_FLEET === "0") return;
     if ((await listVehicles()).length > 0) return;
     const r = await seedFleet();
     console.log(`\n  Flotte importée : ${r.added} véhicule(s) depuis assets/js/data.js.`);
