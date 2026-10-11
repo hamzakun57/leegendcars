@@ -253,8 +253,15 @@
     if (seg[2] === "me") {
       const { data } = await c.auth.getSession();
       const user = data?.session?.user || null;
-      /* Même forme que le serveur : l'écran lit « username ». */
-      return { user: user ? { username: user.email } : null, needsSetup: false };
+      if (!user) {
+        throw new Error("Session expirée, reconnectez-vous.");
+      }
+      const { data: profil } = await c.from("admin_accounts").select("role").eq("id", user.id).maybeSingle();
+      if (!profil || profil.role !== "admin") {
+        await c.auth.signOut().catch(() => {});
+        throw new Error("Compte non autorisé.");
+      }
+      return { user: { username: user.email, role: profil.role }, needsSetup: false };
     }
     if (seg[2] === "password" && methode === "POST") {
       const { data } = await c.auth.getSession();

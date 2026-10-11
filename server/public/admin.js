@@ -42,9 +42,10 @@
   const api = window.LCAdmin && window.LCAdmin.mode === "supabase"
     ? (url, opts = {}) =>
         window.LCAdmin.api(url, opts).catch((e) => {
-          /* Session expirée : Supabase ne renvoie pas 401 mais une session
-             absente. On renvoie l'agent vers l'écran de connexion. */
-          if (/session|token|authent/i.test(e.message || "")) location.href = "/admin/login";
+          /* Session expirée ou absente : renvoi immédiat vers l'écran de connexion. */
+          if (/session|token|authent|autoris/i.test(e.message || "")) {
+            location.replace("/admin/login");
+          }
           throw e;
         })
     : viaServeur;
@@ -215,14 +216,9 @@
     })
   );
 
-  /* Nom de l'agent connecté, affiché dans le bandeau. */
-  api("/api/admin/me")
-    .then(({ user }) => { if (user?.username) $("#who").textContent = user.username; })
-    .catch(() => {});
-
   $("#logout").addEventListener("click", async () => {
-    await api("/api/admin/logout", { method: "POST" });
-    location.href = "/admin/login";
+    try { await api("/api/admin/logout", { method: "POST" }); } catch (_) {}
+    location.replace("/admin/login");
   });
 
   /* ---------- maintenance ---------- */
@@ -2081,6 +2077,18 @@
   });
 
   /* ---------- boot ---------- */
-  loadStats().catch(() => {});
-  loadReservations().catch(() => {});
+  async function boot() {
+    try {
+      const { user } = await api("/api/admin/me");
+      if (!user || !user.username) {
+        location.replace("/admin/login");
+        return;
+      }
+      if ($("#who")) $("#who").textContent = user.username;
+      await Promise.all([loadStats(), loadReservations()]);
+    } catch (_) {
+      location.replace("/admin/login");
+    }
+  }
+  boot();
 })();

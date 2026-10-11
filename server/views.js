@@ -47,6 +47,29 @@ const adminShell = () => `<!doctype html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow">
 <title>Administration — Leegend Cars</title><link rel="stylesheet" href="/admin-assets/admin.css">
+<script src="/admin-assets/admin-config.js"></script>
+<script>
+(function () {
+  var cfg = window.LCAdminConfig || {};
+  if (cfg.source === "supabase") {
+    var raw = localStorage.getItem("lc_admin_session");
+    if (!raw) {
+      location.replace("/admin/login");
+      return;
+    }
+    try {
+      var sess = JSON.parse(raw);
+      if (!sess || !sess.access_token) {
+        location.replace("/admin/login");
+        return;
+      }
+    } catch (e) {
+      location.replace("/admin/login");
+      return;
+    }
+  }
+})();
+</script>
 <script src="/admin-assets/theme.js"></script></head>
 <body>
 <header class="top"><div class="wrap">
