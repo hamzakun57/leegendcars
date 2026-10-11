@@ -13,7 +13,10 @@
     "seed": "node --env-file-if-exists=.env server/seed.js",
     "db:setup": "node --env-file-if-exists=.env scripts/db-setup.mjs",
     "migrate:sqlite": "node --env-file-if-exists=.env scripts/migrate-sqlite.mjs",
-    "test:e2e": "node --env-file-if-exists=.env scripts/test-e2e.mjs"
+    "test:e2e": "node --env-file-if-exists=.env scripts/test-e2e.mjs",
+    "test:maintenance": "node --env-file-if-exists=.env scripts/test-maintenance.mjs",
+    "check:files": "node --env-file-if-exists=.env scripts/check-files.mjs",
+    "test": "npm run test:e2e && npm run test:maintenance"
   },
   "dependencies": {
     "express": "^4.21.2",

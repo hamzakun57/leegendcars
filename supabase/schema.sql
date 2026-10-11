@@ -156,6 +156,25 @@ CREATE TABLE IF NOT EXISTS counters (
   value INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS maintenance (
+  id            BIGSERIAL PRIMARY KEY,
+  vehicle_slug  TEXT NOT NULL REFERENCES vehicles(slug) ON DELETE CASCADE,
+  kind          TEXT NOT NULL DEFAULT 'autre',
+  label         TEXT DEFAULT '',
+  due_date      TEXT NOT NULL,
+  period_days   INTEGER NOT NULL DEFAULT 0,
+  period_km     INTEGER NOT NULL DEFAULT 0,
+  last_done_at  TEXT DEFAULT '',
+  last_cost     INTEGER NOT NULL DEFAULT 0,
+  last_km       INTEGER NOT NULL DEFAULT 0,
+  notes         TEXT DEFAULT '',
+  created_at    TEXT NOT NULL,
+  updated_at    TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_maint_veh  ON maintenance(vehicle_slug);
+CREATE INDEX IF NOT EXISTS idx_maint_due  ON maintenance(due_date);
+
 CREATE TABLE IF NOT EXISTS clients (
   id             BIGSERIAL PRIMARY KEY,
   client_type    TEXT NOT NULL DEFAULT 'particulier',
@@ -197,7 +216,7 @@ DO $$
 DECLARE t TEXT;
 BEGIN
   FOREACH t IN ARRAY ARRAY[
-    'users','blocked_dates','reservations','payments','attachments','clients'
+    'users','blocked_dates','reservations','payments','attachments','clients','maintenance'
   ] LOOP
     EXECUTE format(
       'SELECT setval(pg_get_serial_sequence(%L, %L), COALESCE((SELECT MAX(id) FROM %I), 1), (SELECT MAX(id) FROM %I) IS NOT NULL)',

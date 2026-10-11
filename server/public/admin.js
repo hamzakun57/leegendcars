@@ -76,7 +76,7 @@
   });
 
   /* ---------- tabs (menu latéral) ---------- */
-  const SIDE_LABEL = { res: "Réservations", cli: "Clients", veh: "Flotte", avail: "Indisponibilités", set: "Réglages", dos: "Dossier" };
+  const SIDE_LABEL = { res: "Réservations", sta: "Statistiques", cli: "Clients", veh: "Flotte", avail: "Indisponibilités", mnt: "Maintenance", set: "Réglages", dos: "Dossier" };
 
   function showTab(name) {
     $$(".side [data-tab]").forEach((x) => x.classList.toggle("on", x.dataset.tab === name));
@@ -85,9 +85,11 @@
     $("#crumb").textContent = name === "dos" ? "Réservations › Dossier" : "";
     window.scrollTo({ top: 0 });
     if (name === "res") { loadStats(); loadReservations(); }
+    if (name === "sta") loadStatsVehicles();
     if (name === "cli") loadClients();
     if (name === "veh") loadVehicles();
     if (name === "avail") loadVehicles().then(loadBlocked);
+    if (name === "mnt") loadVehicles().then(loadMaintenance);
   }
 
   $$(".side [data-tab]").forEach((a) =>
@@ -107,6 +109,296 @@
     await api("/api/admin/logout", { method: "POST" });
     location.href = "/admin/login";
   });
+
+  /* ---------- maintenance ---------- */
+  let mntKinds = [];
+
+  /* « tous les 6 mois » plutôt que « tous les 180 jours » : c'est le langage
+     du garage, et 180 jours ne veut rien dire pour une vignette. */
+  function mntCycle(jours) {
+    if (!jours) return "—";
+    if (jours % 365 === 0) return `tous les ${jours / 365} an${jours > 365 ? "s" : ""}`;
+    if (jours % 180 === 0) return `tous les ${jours / 180} mois`;
+    if (jours % 30 === 0) return `tous les ${jours / 30} mois`;
+    return `tous les ${jours} j`;
+  }
+
+  const mntDans = (m) => {
+    if (m.jours === null) return `<span class="faint">—</span>`;
+    if (m.jours < 0) return `<span class="warn-txt">en retard de ${Math.abs(m.jours)} j</span>`;
+    if (m.jours === 0) return `<span class="warn-txt">aujourd'hui</span>`;
+    if (m.jours <= 30) return `<span class="warn-txt">dans ${m.jours} j</span>`;
+    return `<span class="faint">dans ${m.jours} j</span>`;
+  };
+
+  async function loadMaintenance() {
+    const qs = new URLSearchParams();
+    if ($("#mnt-veh").value) qs.set("vehicle", $("#mnt-veh").value);
+    if ($("#mnt-kind").value) qs.set("kind", $("#mnt-kind").value);
+
+    let data;
+    try {
+      data = await api("/api/admin/maintenance?" + qs);
+    } catch (e) {
+      return flash(e.message, "err");
+    }
+    mntKinds = data.kinds;
+
+    const kindsAvant = $("#mnt-kind").value;
+    $("#mnt-kind").innerHTML =
+      '<option value="">Tous les types</option>' +
+      mntKinds.map((k) => `<option value="${esc(k.id)}">${esc(k.label)}</option>`).join("");
+    $("#mnt-kind").value = kindsAvant;
+
+    $("#mnt-cards").innerHTML = [
+      ["Suivis", nf.format(data.items.length), false],
+      ["En retard", nf.format(data.compte.retard), true],
+      ["Sous 30 jours", nf.format(data.compte.bientot), false],
+      ["À jour", nf.format(data.compte.ok), false],
+    ]
+      .map(([l, v, a]) => `<div class="card ${a ? "accent" : ""}"><small>${l}</small><b>${v}</b></div>`)
+      .join("");
+
+    $("#mnt-rows").innerHTML = data.items
+      .map(
+        (m) => `<tr>
+        <td><b>${esc(m.vehicle_name)}</b></td>
+        <td>${esc(m.kind_label)}</td>
+        <td>${m.due_date ? dt(m.due_date) : "—"}</td>
+        <td>${mntDans(m)}</td>
+        <td>${m.last_done_at ? dt(m.last_done_at) : '<span class="faint">jamais</span>'}</td>
+        <td class="num">${m.last_cost ? money(m.last_cost) : "—"}</td>
+        <td><span class="faint">${mntCycle(m.period_days)}</span></td>
+        <td class="row" style="gap:6px;justify-content:flex-end">
+          <button data-mnt-done="${m.id}">Fait</button>
+          <button class="ghost" data-mnt-edit="${m.id}">Modifier</button>
+          <button class="danger" data-mnt-del="${m.id}">Supprimer</button>
+        </td>
+      </tr>`
+      )
+      .join("");
+    $("#mnt-empty").classList.toggle("hide", data.items.length > 0);
+  }
+
+  function mntForm(item = null) {
+    const isNew = !item;
+    const field = (label, id, value, type, extra = "") =>
+      `<div><label>${label}</label><input id="${id}" type="${type || "text"}" value="${esc(value ?? "")}" ${extra}></div>`;
+    const vehicule = item?.vehicle_slug || $("#mnt-veh").value || vehicles[0]?.slug || "";
+
+    openSheet(
+      isNew ? "Nouveau suivi" : item.kind_label,
+      isNew ? "Vignette, assurance, vidange, révision…" : "Modifier l'échéance",
+      `<div class="panel">
+      <label>Véhicule</label>
+      <select id="m-veh" ${isNew ? "" : "disabled"}>
+        ${vehicles.map((v) => `<option value="${esc(v.slug)}" ${v.slug === vehicule ? "selected" : ""}>${esc(v.name)}</option>`).join("")}
+      </select>
+
+      <label>Type d'opération</label>
+      <select id="m-kind">
+        ${mntKinds.map((k) => `<option value="${esc(k.id)}" ${k.id === (item?.kind || "") ? "selected" : ""}>${esc(k.label)}</option>`).join("")}
+      </select>
+      ${field("Type personnalisé (si absent de la liste)", "m-kindlib", item?.label, "text", 'placeholder="Ex : bretelle"')}
+
+      <label>Échéance à ne pas dépasser</label>
+      <input id="m-due" type="date" value="${esc(item?.due_date || "")}">
+
+      <label>Cycle (se reprogramme tout seul quand vous cliquez sur « Fait »)</label>
+      <div class="grid3">
+        ${field("Tous les combien de jours (0 = pas de report)", "m-period", item?.period_days ?? 0, "number", 'min="0" max="3650"')}
+        ${field("Kilométrage du dernier passage", "m-km", item?.last_km ?? 0, "number", 'min="0"')}
+      </div>
+
+      <label>Note (facultatif)</label>
+      <textarea id="m-notes" rows="2">${esc(item?.notes || "")}</textarea>
+    </div>
+    <div class="row" style="margin-top:14px;justify-content:flex-end">
+      <button class="ghost" id="m-cancel">Annuler</button>
+      <button class="primary" id="m-save">${isNew ? "Créer" : "Enregistrer"}</button>
+    </div>`
+    );
+
+    $("#m-cancel").addEventListener("click", closeSheet);
+    $("#m-save").addEventListener("click", async () => {
+      const kindLib = $("#m-kindlib").value.trim();
+      const payload = {
+        vehicle_slug: $("#m-veh").value,
+        kind: kindLib || $("#m-kind").value,
+        due_date: $("#m-due").value,
+        period_days: Number($("#m-period").value) || 0,
+        last_km: Number($("#m-km").value) || 0,
+        notes: $("#m-notes").value.trim(),
+      };
+      if (!payload.due_date) return flash("Indiquez la date d'échéance.", "err");
+      try {
+        if (isNew) await api("/api/admin/maintenance", { method: "POST", body: payload });
+        else await api("/api/admin/maintenance/" + item.id, { method: "PATCH", body: payload });
+        flash(isNew ? "Suivi ajouté." : "Suivi mis à jour.");
+        closeSheet();
+        loadMaintenance();
+      } catch (e) {
+        flash(e.message, "err");
+      }
+    });
+  }
+
+  /* « Fait » : on demande le coût et le kilométrage, le serveur date l'opération
+     et reprogramme la prochaine échéance selon le cycle. */
+  function mntDone(id) {
+    const row = $("#mnt-rows").querySelector(`[data-mnt-done="${id}"]`)?.closest("tr");
+    const nom = row?.querySelector("td")?.textContent || "";
+    const field = (label, f) => `<div><label>${label}</label><input id="${f}" type="number" min="0"></div>`;
+
+    openSheet("Opération réalisée", nom, `<div class="panel">
+      <div class="grid3">${field("Coût (MAD)", "d-cost")}${field("Kilométrage", "d-km")}</div>
+      <label>Note (facultatif)</label>
+      <input id="d-note" placeholder="Ex : garage Al Amal">
+    </div>
+    <div class="row" style="margin-top:14px;justify-content:flex-end">
+      <button class="ghost" id="d-cancel">Annuler</button>
+      <button class="primary" id="d-save">Valider</button>
+    </div>`);
+
+    $("#d-cancel").addEventListener("click", closeSheet);
+    $("#d-save").addEventListener("click", async () => {
+      try {
+        await api(`/api/admin/maintenance/${id}/done`, {
+          method: "POST",
+          body: { cost: Number($("#d-cost").value) || 0, km: Number($("#d-km").value) || 0, note: $("#d-note").value.trim() },
+        });
+        flash("Enregistré.");
+        closeSheet();
+        loadMaintenance();
+      } catch (e) {
+        flash(e.message, "err");
+      }
+    });
+  }
+
+  $("#mnt-refresh").addEventListener("click", loadMaintenance);
+  $("#mnt-veh").addEventListener("change", loadMaintenance);
+  $("#mnt-kind").addEventListener("change", loadMaintenance);
+  $("#mnt-new").addEventListener("click", () => mntForm(null));
+
+  $("#mnt-rows").addEventListener("click", async (e) => {
+    const done = e.target.closest("[data-mnt-done]");
+    const edit = e.target.closest("[data-mnt-edit]");
+    const del = e.target.closest("[data-mnt-del]");
+    if (done) return mntDone(done.dataset.mntDone);
+    if (edit) {
+      const items = await api("/api/admin/maintenance");
+      return mntForm(items.items.find((m) => String(m.id) === edit.dataset.mntEdit));
+    }
+    if (del && confirm("Supprimer ce suivi ?")) {
+      await api("/api/admin/maintenance/" + del.dataset.mntDel, { method: "DELETE" });
+      flash("Suivi supprimé.");
+      loadMaintenance();
+    }
+  });
+
+  /* ---------- statistiques : rendement par voiture ---------- */
+  /* Une période se choisit par presets ; « Période précise » affiche les deux
+     dates. Sans paramètre, l'API renvoie tout l'historique. */
+  function staPeriode() {
+    const v = $("#sta-periode").value;
+    const iso = (d) => d.toISOString().slice(0, 10);
+    const today = new Date();
+    if (v === "month") {
+      const debut = new Date(today.getFullYear(), today.getMonth(), 1);
+      return { from: iso(debut), to: iso(today) };
+    }
+    if (v === "year") return { from: `${today.getFullYear()}-01-01`, to: `${today.getFullYear()}-12-31` };
+    if (v === "last") {
+      const y = today.getFullYear() - 1;
+      return { from: `${y}-01-01`, to: `${y}-12-31` };
+    }
+    if (v === "custom") return { from: $("#sta-from").value, to: $("#sta-to").value };
+    return {};
+  }
+
+  let staData = null;
+
+  async function loadStatsVehicles() {
+    const { from, to } = staPeriode();
+    const qs = new URLSearchParams({ ...(from ? { from } : {}), ...(to ? { to } : {}) });
+    try {
+      staData = await api("/api/admin/stats/vehicles?" + qs);
+    } catch (e) {
+      flash(e.message, "err");
+      return;
+    }
+
+    const g = staData.global;
+    $("#sta-global").innerHTML = [
+      ["Locations", nf.format(g.rentals), false],
+      ["Jours loués", nf.format(g.jours), false],
+      ["Chiffre d'affaires", money(g.ca), true],
+      ["Encaissé", money(g.encaisse), false],
+      ["Reste dû", money(g.reste), false],
+      ["Prix moyen / jour", money(g.prixMoyen), false],
+      ["Annulées", nf.format(g.annulees), false],
+    ]
+      .map(([l, v, a]) => `<div class="card ${a ? "accent" : ""}"><small>${l}</small><b>${v}</b></div>`)
+      .join("");
+
+    const maxCa = Math.max(1, ...staData.vehicles.map((v) => v.ca));
+    const rows = staData.vehicles.map((v) => {
+      /* Sans CA la barre resterait à 100 % : on la masque plutôt que de mentir. */
+      const w = v.ca ? Math.round((v.ca / maxCa) * 100) : 0;
+      return `<tr>
+        <td><b>${esc(v.name)}</b>${v.active ? "" : ' <span class="pill">désactivé</span>'}</td>
+        <td class="num">${nf.format(v.rentals)}</td>
+        <td class="num">${nf.format(v.jours)}</td>
+        <td class="num"><b>${money(v.ca)}</b></td>
+        <td class="num">${money(v.encaisse)}</td>
+        <td class="num">${v.reste > 0 ? `<span class="warn">${money(v.reste)}</span>` : "—"}</td>
+        <td class="num">${v.jours ? money(v.prixMoyen) : "—"}</td>
+        <td>
+          <div class="bar" title="${v.part} % du chiffre d'affaires"><i style="width:${w}%"></i></div>
+          <small class="faint">${v.part} %</small>
+        </td>
+        <td class="num">${v.annulees || "—"}</td>
+      </tr>`;
+    });
+    $("#sta-rows").innerHTML = rows.join("");
+    $("#sta-empty").classList.toggle("hide", staData.vehicles.some((v) => v.rentals || v.annulees));
+  }
+
+  /* Export CSV : séparateur point-virgule et BOM, pour qu'Excel ouvre le
+     fichier avec les bons accents sans import manuel. */
+  function staExport() {
+    if (!staData) return;
+    const lignes = [
+      ["Véhicule", "Locations", "Jours loués", "CA (MAD)", "Encaissé (MAD)", "Reste dû (MAD)", "Prix moyen /j", "Part du CA (%)", "Annulées"],
+      ...staData.vehicles.map((v) => [v.name, v.rentals, v.jours, v.ca, v.encaisse, v.reste, v.prixMoyen, v.part, v.annulees]),
+    ];
+    const csv =
+      "﻿" +
+      lignes.map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(";")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `rendement-flotte-${staData.from === "0000-01-01" ? "tout" : staData.from}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  $("#sta-periode").addEventListener("change", () => {
+    const custom = $("#sta-periode").value === "custom";
+    $("#sta-custom").classList.toggle("hide", !custom);
+    if (custom && !$("#sta-from").value) {
+      const today = new Date();
+      const debut = new Date(today.getFullYear(), today.getMonth(), 1);
+      $("#sta-from").value = debut.toISOString().slice(0, 10);
+      $("#sta-to").value = today.toISOString().slice(0, 10);
+    }
+    loadStatsVehicles();
+  });
+  $("#sta-from").addEventListener("change", loadStatsVehicles);
+  $("#sta-to").addEventListener("change", loadStatsVehicles);
+  $("#sta-refresh").addEventListener("click", loadStatsVehicles);
+  $("#sta-export").addEventListener("click", staExport);
 
   /* ---------- stats + reservations ---------- */
   async function loadStats() {
@@ -1325,6 +1617,14 @@
     );
     const sel = $("#bl-veh");
     if (sel) sel.innerHTML = list.map((v) => `<option value="${esc(v.slug)}">${esc(v.name)}</option>`).join("");
+    const mnt = $("#mnt-veh");
+    if (mnt) {
+      const avant = mnt.value;
+      mnt.innerHTML =
+        '<option value="">Tous les véhicules</option>' +
+        list.map((v) => `<option value="${esc(v.slug)}">${esc(v.name)}</option>`).join("");
+      mnt.value = avant; // on garde le filtre en place après rechargement
+    }
   }
 
   function vehicleCard(v) {

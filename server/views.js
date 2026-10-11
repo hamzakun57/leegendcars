@@ -54,10 +54,12 @@ const adminShell = () => `<!doctype html>
   <nav class="side" id="side" aria-label="Menu principal">
     <div class="side__group">Pilotage</div>
     <a data-tab="res" class="on"><span class="ic">▤</span> Réservations <span class="badge" id="side-badge"></span></a>
+    <a data-tab="sta"><span class="ic">◧</span> Statistiques</a>
     <a data-tab="cli"><span class="ic">☺</span> Clients</a>
     <div class="side__group"> exploitation</div>
     <a data-tab="veh"><span class="ic">▣</span> Flotte</a>
     <a data-tab="avail"><span class="ic">⊘</span> Indisponibilités</a>
+    <a data-tab="mnt"><span class="ic">✚</span> Maintenance</a>
     <div class="side__group">Compte</div>
     <a data-tab="set"><span class="ic">⚙</span> Réglages</a>
     <div class="side__foot">
@@ -92,6 +94,37 @@ const adminShell = () => `<!doctype html>
         <tbody id="rows"></tbody>
       </table><div id="rempty" class="empty hide">
         <b>Aucune réservation</b>Les demandes envoyées depuis le site apparaîtront ici.
+      </div></div>
+    </section>
+
+    <section id="tab-sta" class="hide">
+      <h1>Statistiques</h1>
+      <p class="sub">Rendement de chaque voiture. Seules les réservations confirmées et livrées comptent
+        comme chiffre d'affaires ; la période se base sur la date de prise en charge.</p>
+      <div class="toolbar">
+        <select id="sta-periode">
+          <option value="all">Tout l'historique</option>
+          <option value="month">Ce mois-ci</option>
+          <option value="year">Cette année</option>
+          <option value="last">L'année dernière</option>
+          <option value="custom">Période précise…</option>
+        </select>
+        <span id="sta-custom" class="row hide">
+          <input id="sta-from" type="date"><span class="faint">→</span><input id="sta-to" type="date">
+        </span>
+        <button id="sta-refresh">Actualiser</button>
+        <button class="ghost" id="sta-export" style="margin-left:auto">Exporter en CSV</button>
+      </div>
+      <div class="cards" id="sta-global"></div>
+      <div class="panel panel--table"><table>
+        <thead><tr>
+          <th>Véhicule</th><th class="num">Locations</th><th class="num">Jours loués</th>
+          <th class="num">CA</th><th class="num">Encaissé</th><th class="num">Reste dû</th>
+          <th class="num">Prix moyen /j</th><th>Part du CA</th><th class="num">Annulées</th>
+        </tr></thead>
+        <tbody id="sta-rows"></tbody>
+      </table><div id="sta-empty" class="empty hide">
+        <b>Aucune location sur cette période</b>Changez de période ou confirmez des réservations.
       </div></div>
     </section>
 
@@ -146,6 +179,33 @@ const adminShell = () => `<!doctype html>
         <thead><tr><th>Véhicule</th><th>Du</th><th>Au</th><th>Motif</th><th></th></tr></thead>
         <tbody id="bl-rows"></tbody>
     </table></div>
+    </section>
+
+    <section id="tab-mnt" class="hide">
+      <h1>Maintenance</h1>
+      <p class="sub">Échéances à tenir pour chaque voiture : vignette, assurance, contrôle technique, vidange…
+        Quand vous cliquez sur « Fait », l'échéance suivante se reprogramme toute seule.</p>
+      <div class="cards" id="mnt-cards"></div>
+      <div class="toolbar">
+        <select id="mnt-veh">
+          <option value="">Tous les véhicules</option>
+        </select>
+        <select id="mnt-kind">
+          <option value="">Tous les types</option>
+        </select>
+        <button id="mnt-refresh">Actualiser</button>
+        <button class="primary" id="mnt-new" style="margin-left:auto">+ Nouveau suivi</button>
+      </div>
+      <div class="panel panel--table"><table>
+        <thead><tr>
+          <th>Véhicule</th><th>Type</th><th>Échéance</th><th>Dans</th>
+          <th>Dernier</th><th class="num">Coût</th><th>Cycle</th><th></th>
+        </tr></thead>
+        <tbody id="mnt-rows"></tbody>
+      </table><div id="mnt-empty" class="empty hide">
+        <b>Aucun suivi</b>Ajoutez la vignette, l'assurance et la vidange de vos voitures pour ne plus
+        dépasser une échéance.
+      </div></div>
     </section>
 
     <section id="tab-set" class="hide">

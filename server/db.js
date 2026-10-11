@@ -168,6 +168,7 @@ export async function updateVehicle(slug, input) {
       await t.query("UPDATE vehicles SET slug = $1 WHERE slug = $2", [newSlug, slug]);
       await t.query("UPDATE reservations SET vehicle_slug = $1 WHERE vehicle_slug = $2", [newSlug, slug]);
       await t.query("UPDATE blocked_dates SET vehicle_slug = $1 WHERE vehicle_slug = $2", [newSlug, slug]);
+      await t.query("UPDATE maintenance SET vehicle_slug = $1 WHERE vehicle_slug = $2", [newSlug, slug]);
     }
   });
 
@@ -439,6 +440,238 @@ export async function deleteAttachment(attachmentId) {
 }
 
 export const deleteReservation = (id) => query("DELETE FROM reservations WHERE id = $1", [id]);
+
+/* ---------- statistiques : rendement par véhicule ---------- */
+
+const RECU = "('confirmee','livree')";
+
+/**
+ * Rendement de chaque voiture sur une période, filtrée sur la date de prise en
+ * charge (et non la date de saisie : une location de mars doit compter dans
+ * mars, même reçue en février).
+ *
+ * Seules les réservations confirmées et livrées comptent comme du chiffre
+ * d'affaires. Les annulées et les demandes en attente sont comptées à part :
+ * elles expliquent un écart sans fausser le chiffre gagné.
+ */
+export async function vehicleStats({ from = "0000-01-01", to = "9999-12-31" } = {}) {
+  const bornes = [from, to];
+
+  const lignes = await many(
+    `SELECT v.slug, v.name, v.active,
+            count(*) FILTER (WHERE r.status IN ${RECU})::int                          AS rentals,
+            coalesce(sum(r.days) FILTER (WHERE r.status IN ${RECU}), 0)::int          AS jours,
+            coalesce(sum(r.total + r.extra_fee) FILTER (WHERE r.status IN ${RECU}), 0)::int AS ca,
+            coalesce(sum(r.total_paid) FILTER (WHERE r.status IN ${RECU}), 0)::int     AS encaisse,
+            count(*) FILTER (WHERE r.status = 'annulee')::int                         AS annulees,
+            count(*) FILTER (WHERE r.status = 'nouvelle')::int                        AS nouvelles
+       FROM vehicles v
+       LEFT JOIN reservations r
+              ON r.vehicle_slug = v.slug
+             AND COALESCE(NULLIF(r.pickup_date, ''), r.created_at) BETWEEN $1 AND $2
+      GROUP BY v.slug, v.name, v.active
+      ORDER BY ca DESC, rentals DESC, v.name`,
+    bornes
+  );
+
+  /* Jours d'indisponibilité déclarés sur la période : ils servent de dénominateur
+     au taux d'occupation (jours loués / jours loués + jours bloqués). */
+  const bloques = new Map(
+    (
+      await many(
+        `SELECT vehicle_slug,
+                coalesce(sum((LEAST(end_date, $2)::date - GREATEST(start_date, $1)::date) + 1), 0)::int AS jours
+           FROM blocked_dates
+          WHERE end_date >= $1 AND start_date <= $2
+          GROUP BY vehicle_slug`,
+        bornes
+      )
+    ).map((r) => [r.vehicle_slug, r.jours])
+  );
+
+  const global = lignes.reduce(
+    (acc, r) => ({
+      rentals: acc.rentals + r.rentals,
+      jours: acc.jours + r.jours,
+      ca: acc.ca + r.ca,
+      encaisse: acc.encaisse + r.encaisse,
+      annulees: acc.annulees + r.annulees,
+      nouvelles: acc.nouvelles + r.nouvelles,
+    }),
+    { rentals: 0, jours: 0, ca: 0, encaisse: 0, annulees: 0, nouvelles: 0 }
+  );
+  global.reste = global.ca - global.encaisse;
+  global.prixMoyen = global.jours ? Math.round(global.ca / global.jours) : 0;
+
+  const vehicles = lignes.map((r) => {
+    const bloque = bloques.get(r.slug) || 0;
+    const base = r.jours + bloque;
+    return {
+      slug: r.slug,
+      name: r.name,
+      active: r.active,
+      rentals: r.rentals,
+      jours: r.jours,
+      ca: r.ca,
+      encaisse: r.encaisse,
+      reste: r.ca - r.encaisse,
+      prixMoyen: r.jours ? Math.round(r.ca / r.jours) : 0,
+      part: global.ca ? Math.round((r.ca / global.ca) * 1000) / 10 : 0,
+      annulees: r.annulees,
+      nouvelles: r.nouvelles,
+      joursBloques: bloque,
+      /* Une voiture sans aucune location n'a pas de rendement : 0 plutôt que NaN. */
+      occupation: base ? Math.round((r.jours / base) * 100) : 0,
+    };
+  });
+
+  return { from, to, global, vehicles };
+}
+
+/* ---------- maintenance : vignettes, assurance, vidanges… ---------- */
+
+/**
+ * Types de suivi proposés. « jours » est la durée par défaut proposée quand on
+ * coche « Fait » : une vidange se reprogramme six mois plus tard, une vignette
+ * un an. 0 = pas de report automatique (on laisse l'échéance telle quelle).
+ * La liste n'est pas fermée : l'admin peut créer un type à la volée.
+ */
+export const MAINTENANCE_KINDS = [
+  { id: "vignette", label: "Vignette", jours: 365 },
+  { id: "assurance", label: "Assurance", jours: 365 },
+  { id: "controle", label: "Contrôle technique", jours: 365 },
+  { id: "vidange", label: "Vidange", jours: 180 },
+  { id: "revision", label: "Révision", jours: 365 },
+  { id: "filtres", label: "Filtres", jours: 365 },
+  { id: "freins", label: "Freins", jours: 365 },
+  { id: "pneus", label: "Pneus", jours: 365 },
+  { id: "autre", label: "Autre", jours: 0 },
+];
+
+/** Jours avant échéance : négatif si la date est dépassée. */
+const daysUntil = (iso, today) =>
+  Math.round((new Date(`${iso}T00:00:00`) - new Date(`${today}T00:00:00`)) / 86400000);
+
+const addDays = (iso, days) => {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+};
+
+/** Seuils d'affichage : en retard, puis dû sous 30 jours. */
+export const MAINTENANCE_SOON_DAYS = 30;
+
+/** rows = maintenance + nom du véhicule + état calculé. */
+function rowToMaintenance(row) {
+  if (!row) return null;
+  const today = now().slice(0, 10);
+  const jours = row.due_date ? daysUntil(row.due_date, today) : null;
+  const kind = MAINTENANCE_KINDS.find((k) => k.id === row.kind);
+  return {
+    ...row,
+    vehicle_name: row.vehicle_name || row.vehicle_slug,
+    kind_label: kind?.label || row.label || row.kind,
+    jours,
+    /* Sans date exploitable on ne prétend rien : ni retard, ni échéance proche. */
+    statut: jours === null ? "inconnu" : jours < 0 ? "retard" : jours <= MAINTENANCE_SOON_DAYS ? "bientot" : "ok",
+  };
+}
+
+const MAINT_SELECT = `SELECT m.*, v.name AS vehicle_name FROM maintenance m
+                        LEFT JOIN vehicles v ON v.slug = m.vehicle_slug`;
+
+export function listMaintenance({ slug, kind } = {}) {
+  const where = [];
+  const params = [];
+  /* Les indices de placeholders suivent la position réelle dans params : un
+     $2 en dur casse dès qu'un seul filtre est fourni. */
+  if (slug) { params.push(slug); where.push(`m.vehicle_slug = $${params.length}`); }
+  if (kind) { params.push(kind); where.push(`m.kind = $${params.length}`); }
+  /* Les échéances les plus proches d'abord : ce qui est en retard remonte tout seul. */
+  const sql = `${MAINT_SELECT} ${where.length ? "WHERE " + where.join(" AND ") : ""}
+                 ORDER BY m.due_date NULLS LAST, v.name, m.kind`;
+  return many(sql, params).then((rows) => rows.map(rowToMaintenance));
+}
+
+export const getMaintenance = async (id) =>
+  rowToMaintenance(await one(`${MAINT_SELECT} WHERE m.id = $1`, [Number(id)]));
+
+/** Ne conserve que les champs connus, aux bons types. */
+function cleanMaintenanceInput(input = {}) {
+  const out = {};
+  if (input.vehicle_slug !== undefined) out.vehicle_slug = String(input.vehicle_slug ?? "").trim().slice(0, 80);
+  if (input.kind !== undefined) {
+    out.kind = String(input.kind ?? "autre").trim().toLowerCase().slice(0, 40) || "autre";
+  }
+  if (input.label !== undefined) out.label = String(input.label ?? "").trim().slice(0, 80);
+  if (input.due_date !== undefined) out.due_date = isoOrEmpty(input.due_date);
+  if (input.period_days !== undefined) out.period_days = Math.min(3650, Math.max(0, num(input.period_days, 0)));
+  if (input.period_km !== undefined) out.period_km = Math.min(1000000, Math.max(0, num(input.period_km, 0)));
+  if (input.last_cost !== undefined) out.last_cost = Math.max(0, num(input.last_cost, 0));
+  if (input.notes !== undefined) out.notes = String(input.notes ?? "").trim().slice(0, 500);
+  return out;
+}
+
+export async function createMaintenance(input) {
+  const data = cleanMaintenanceInput(input);
+  if (!data.vehicle_slug || !data.due_date) return null;
+  const row = await one(
+    `INSERT INTO maintenance (vehicle_slug, kind, label, due_date, period_days, period_km, notes, created_at, updated_at)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+    [
+      data.vehicle_slug,
+      data.kind ?? "autre",
+      data.label ?? "",
+      data.due_date,
+      data.period_days ?? 0,
+      data.period_km ?? 0,
+      data.notes ?? "",
+      now(),
+      now(),
+    ]
+  );
+  return getMaintenance(row.id);
+}
+
+export async function updateMaintenance(id, input) {
+  const cur = await getMaintenance(id);
+  if (!cur) return null;
+  const data = cleanMaintenanceInput(input);
+  delete data.vehicle_slug; // changer de véhicule n'a pas de sens : on recrée l'entrée
+  if (!Object.keys(data).length) return cur;
+  const keys = Object.keys(data);
+  await query(
+    `UPDATE maintenance SET ${keys.map((k, i) => `${k} = $${i + 1}`).join(", ")}, updated_at = $${keys.length + 1} WHERE id = $${keys.length + 2}`,
+    [...keys.map((k) => data[k]), now(), Number(id)]
+  );
+  return getMaintenance(id);
+}
+
+/**
+ * Marque l'opération comme faite : la date du jour devient le dernier jour
+ * worked, et l'échéance repart de là si une durée de cycle est définie.
+ */
+export async function markMaintenanceDone(id, { cost, km, note } = {}) {
+  const m = await getMaintenance(id);
+  if (!m) return null;
+  const jour = now().slice(0, 10);
+  const values = [jour, Number(cost) >= 0 ? Number(cost) : m.last_cost, Number(km) > 0 ? Number(km) : m.last_km];
+  let sql = `UPDATE maintenance SET last_done_at = $1, last_cost = $2, last_km = $3`;
+  let params = values;
+  if (m.period_days > 0) {
+    sql += `, due_date = $4`;
+    params = [...values, addDays(jour, m.period_days)];
+  }
+  if (note !== undefined && String(note).trim()) {
+    sql += `, notes = $${params.length + 1}`;
+    params = [...params, String(note).trim().slice(0, 500)];
+  }
+  sql += `, updated_at = $${params.length + 1} WHERE id = $${params.length + 2}`;
+  await query(sql, [...params, now(), Number(id)]);
+  return getMaintenance(id);
+}
+
+export const deleteMaintenance = (id) => query("DELETE FROM maintenance WHERE id = $1", [Number(id)]);
 
 /* ---------- clients ---------- */
 

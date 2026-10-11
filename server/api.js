@@ -1,11 +1,11 @@
 import express from "express";
 import {
   addBlocked, addAttachment, addPayment, clearSignature, computeTotals, countByStatus, countReservations,
-  createClient, createReservation, createSignatureToken, deleteAttachment, deleteBlocked, deleteClient,
-  deletePayment, deleteReservation, deleteVehicle, DOSSIER_FIELDS, getClient, getDossier, getUser,
-  getVehicle, insertVehicle, isDossierOpen, listAttachments, listBlocked, listClients, listReservations,
-  listVehicles, nextInvoiceNumber, saveSignature, setPassword, updateClient, updateReservation,
-  updateVehicle,
+  createClient, createMaintenance, createReservation, createSignatureToken, deleteAttachment, deleteBlocked,
+  deleteClient, deleteMaintenance, deletePayment, deleteReservation, deleteVehicle, DOSSIER_FIELDS, getClient,
+  getDossier, getUser, getVehicle, insertVehicle, isDossierOpen, listAttachments, listBlocked, listClients,
+  listMaintenance, listReservations, listVehicles, MAINTENANCE_KINDS, markMaintenanceDone, nextInvoiceNumber,
+  saveSignature, setPassword, updateClient, updateMaintenance, updateReservation, updateVehicle, vehicleStats,
 } from "./db.js";
 import { deletePhoto, deleteStored, DOC_KINDS, MAX_PHOTOS, saveDocument, savePhoto } from "./uploads.js";
 import { contractHtml } from "./contract.js";
@@ -239,6 +239,92 @@ api.get("/admin/stats", requireAdmin, h(async (_req, res) => {
     vehicles: all.length,
     activeVehicles: (await listVehicles({ includeInactive: false })).length,
   });
+}));
+
+/* ============ admin: statistiques ============ */
+/* Rendement par voiture sur une période. Sans dates, l'historique complet. */
+api.get("/admin/stats/vehicles", requireAdmin, h(async (req, res) => {
+  const from = isDate(str(req.query.from, 10)) ? str(req.query.from, 10) : undefined;
+  const to = isDate(str(req.query.to, 10)) ? str(req.query.to, 10) : undefined;
+  if (from && to && to < from) {
+    return res.status(422).json({ error: "La fin de période doit être après le début." });
+  }
+  res.setHeader("Cache-Control", "no-store");
+  res.json(await vehicleStats({ from, to }));
+}));
+
+/* ============ admin: maintenance ============ */
+/* Vignette, assurance, vidange… Une entrée = une échéance à tenir. */
+api.get("/admin/maintenance", requireAdmin, h(async (req, res) => {
+  const slug = str(req.query.vehicle, 80);
+  const kind = str(req.query.kind, 40);
+  const items = await listMaintenance({ slug: slug || undefined, kind: kind || undefined });
+  res.setHeader("Cache-Control", "no-store");
+  res.json({
+    items,
+    kinds: MAINTENANCE_KINDS,
+    compte: {
+      retard: items.filter((m) => m.statut === "retard").length,
+      bientot: items.filter((m) => m.statut === "bientot").length,
+      ok: items.filter((m) => m.statut === "ok").length,
+    },
+  });
+}));
+
+api.post("/admin/maintenance", requireAdmin, h(async (req, res) => {
+  const b = req.body || {};
+  const slug = str(b.vehicle_slug, 80);
+  if (!(await getVehicle(slug))) return res.status(422).json({ error: "Véhicule inconnu" });
+  if (!isDate(str(b.due_date, 10))) return res.status(422).json({ error: "Date d'échéance invalide (AAAA-MM-JJ)" });
+
+  /* Un type inconnu n'est pas refusé : il est simplement créé, avec la durée
+     par défaut du type le plus proche ou 0 (pas de report automatique). */
+  const kind = slugify(str(b.kind, 40)) || "autre";
+  const preset = MAINTENANCE_KINDS.find((k) => k.id === kind);
+  const item = await createMaintenance({
+    vehicle_slug: slug,
+    kind,
+    label: str(b.label, 80),
+    due_date: str(b.due_date, 10),
+    period_days: b.period_days === undefined ? (preset?.jours ?? 0) : int(b.period_days),
+    period_km: int(b.period_km),
+    notes: str(b.notes, 500),
+  });
+  if (!item) return res.status(422).json({ error: "Échéance invalide" });
+  res.status(201).json({ ok: true, item });
+}));
+
+api.patch("/admin/maintenance/:id", requireAdmin, h(async (req, res) => {
+  const b = req.body || {};
+  if (b.due_date !== undefined && !isDate(str(b.due_date, 10))) {
+    return res.status(422).json({ error: "Date d'échéance invalide (AAAA-MM-JJ)" });
+  }
+  const item = await updateMaintenance(int(req.params.id), {
+    kind: b.kind !== undefined ? slugify(str(b.kind, 40)) || "autre" : undefined,
+    label: b.label !== undefined ? str(b.label, 80) : undefined,
+    due_date: b.due_date !== undefined ? str(b.due_date, 10) : undefined,
+    period_days: b.period_days !== undefined ? int(b.period_days) : undefined,
+    period_km: b.period_km !== undefined ? int(b.period_km) : undefined,
+    notes: b.notes !== undefined ? str(b.notes, 500) : undefined,
+  });
+  if (!item) return res.status(404).json({ error: "Entrée introuvable" });
+  res.json({ ok: true, item });
+}));
+
+/** L'opération a été réalisée : on date et on reprogramme la prochaine échéance. */
+api.post("/admin/maintenance/:id/done", requireAdmin, h(async (req, res) => {
+  const item = await markMaintenanceDone(int(req.params.id), {
+    cost: int(req.body?.cost),
+    km: int(req.body?.km),
+    note: req.body?.note === undefined ? undefined : str(req.body.note, 500),
+  });
+  if (!item) return res.status(404).json({ error: "Entrée introuvable" });
+  res.json({ ok: true, item });
+}));
+
+api.delete("/admin/maintenance/:id", requireAdmin, h(async (req, res) => {
+  await deleteMaintenance(int(req.params.id));
+  res.json({ ok: true });
 }));
 
 /* ============ admin: reservations ============ */

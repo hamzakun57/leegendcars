@@ -67,14 +67,19 @@ try {
 
   const avant = await json(await req("GET", "/api/admin/stats"));
   check("GET /api/admin/stats", typeof avant.total === "number" && avant.vehicles === v.vehicles.length, JSON.stringify(avant));
+  check("stats/vehicles protege (401)", (await fetch(`${B}/api/admin/stats/vehicles`)).status === 401);
 
   /* ---------- réservations ---------- */
   const liste = await json(await req("GET", "/api/admin/reservations"));
   check("GET /api/admin/reservations", liste.reservations.length === avant.total, `${liste.reservations.length} lignes`);
   const filtre = await json(await req("GET", "/api/admin/reservations?status=confirmee"));
   check("filtre par statut", filtre.reservations.every((r) => r.status === "confirmee"), `${filtre.reservations.length} confirmees`);
-  const recherche = await json(await req("GET", "/api/admin/reservations?q=kaissouni"));
-  check("recherche insensible a la casse", recherche.reservations.length === 3, `${recherche.reservations.length} resultats`);
+  /* La recherche doit ignorer la casse : on compare les deux écritures d'un même
+     nom plutôt que de figer un nombre, qui change dès qu'une réservation réelle
+     est ajoutée. */
+  const min = await json(await req("GET", "/api/admin/reservations?q=kaissouni"));
+  const maj = await json(await req("GET", "/api/admin/reservations?q=KAISSOUNI"));
+  check("recherche insensible a la casse", min.reservations.length === maj.reservations.length && min.reservations.length > 0, `${min.reservations.length} resultats`);
 
   /* Une réservation qui nous appartient : le test ne doit jamais modifier un
      dossier réel, sinon chaque exécution abîme les données du client. */
@@ -134,6 +139,14 @@ try {
   const dossier = await json(await req("GET", `/api/admin/reservations/${cible.id}`));
   check("signature enregistree", dossier.reservation.signatureSigned === true && dossier.reservation.signatureMode === "remote");
   check("DELETE signature", (await req("DELETE", `/api/admin/reservations/${cible.id}/signature`)).status === 200);
+
+  /* ---------- statistiques ---------- */
+  const sta = await json(await req("GET", "/api/admin/stats/vehicles"));
+  const somme = sta.vehicles.reduce((a, v) => a + v.rentals + v.annulees, 0);
+  check("GET /api/admin/stats/vehicles", Array.isArray(sta.vehicles) && sta.vehicles.length === v.vehicles.length, `${sta.vehicles.length} vehicules`);
+  check("coherence global / lignes", sta.global.rentals === sta.vehicles.reduce((a, x) => a + x.rentals, 0));
+  check("periodes invalides refusees", (await req("GET", "/api/admin/stats/vehicles?from=2026-12-31&to=2026-01-01")).status === 422);
+  check("perfil du vehicule de test present", somme >= 1);
 
   /* ---------- clients ---------- */
   const cl = await json(await req("POST", "/api/admin/clients", { last_name: "Test" + TAG, first_name: "Ali", phone: "+212600000000", cin: "BK1234", birthdate: "1990-05-02" }));
