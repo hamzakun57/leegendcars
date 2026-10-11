@@ -4,7 +4,10 @@ let pass = 0, fail = 0;
 const check = (n, ok, extra = "") => { console.log(`${ok ? "  OK  " : "ECHEC"} ${n}${extra ? " — " + extra : ""}`); ok ? pass++ : fail++; };
 
 const api = await (await fetch(`${B}/api/vehicles`)).json();
-check("API renvoie un parc vide", Array.isArray(api.vehicles) && api.vehicles.length === 0);
+/* La base est celle de l'agence : elle n'est pas vide en général. Ce qui compte
+   est le comportement du site, mesuré en écart, pas un compte absolu. */
+check("API renvoie une liste", Array.isArray(api.vehicles), `${api.vehicles.length} vehicule(s)`);
+const avant = api.vehicles.length;
 
 const src = await (await fetch(`${B}/assets/js/app.js`)).text();
 check("liste vide => parc vide (pas de repli)", /if \(!data\.vehicles\.length\) \{\s*D\.VEHICLES = \[\];/.test(src));
@@ -36,10 +39,10 @@ if (login.status === 200) {
   const v = await (await fetch(`${B}/api/admin/vehicles`, { method: "POST", headers: H, body: JSON.stringify({ name: nom, price_from: 500 }) })).json();
   check("agence peut saisir une voiture", v.ok === true && v.vehicle.slug === nom.toLowerCase().replace(/\s+/g, "-"));
   const apres = await (await fetch(`${B}/api/vehicles`)).json();
-  check("elle apparait sur le site public", apres.vehicles.length === 1, `${apres.vehicles.length} vehicule(s)`);
+  check("elle apparait sur le site public", apres.vehicles.length === avant + 1, `${apres.vehicles.length} vehicule(s)`);
   await fetch(`${B}/api/admin/vehicles/${v.vehicle.slug}`, { method: "DELETE", headers: H });
   const vide = await (await fetch(`${B}/api/vehicles`)).json();
-  check("suppression => retour au parc vide", vide.vehicles.length === 0);
+  check("sa suppression la retire du site", vide.vehicles.length === avant, `${vide.vehicles.length} vehicule(s)`);
 } else {
   console.log("  (test de saisie ignore : variables TEST_USER / TEST_PASS absentes)");
 }

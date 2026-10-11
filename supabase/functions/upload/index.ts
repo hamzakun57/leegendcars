@@ -9,7 +9,7 @@
 import { corps, ErreurHttp, gerer, json } from "../_shared/http.ts";
 import { exigerAdmin } from "../_shared/auth.ts";
 import {
-  BUCKET, cheminPublic, envoyer, MAX_DOC, MAX_ENVOI, MAX_PHOTO, nomSure, tailleLot, valider,
+  BUCKET, BUCKET_PHOTOS, cheminPublic, envoyer, MAX_DOC, MAX_ENVOI, MAX_PHOTO, nomSure, tailleLot, valider,
 } from "../_shared/fichiers.ts";
 
 Deno.serve((requete) =>
@@ -19,26 +19,34 @@ Deno.serve((requete) =>
 
     /* ---------- suppression ---------- */
     if (data.action === "delete") {
-      const nom = nomSure(data.stored_name);
-      if (!nom) throw new ErreurHttp(400, "Fichier non reconnu.");
-      /* Un même nom peut désigner une pièce de dossier (dans reservations/)
-         ou une photo de véhicule (à la racine). On tente les deux, comme le
-         faisait le serveur : aucun n'est devinable, donc aucun n'est risqué. */
-      const bare = nom.split("/").pop() as string;
-      const candidats = [...new Set([nom, `uploads/reservations/${bare}`])];
+      /* La clé est reconstruite par nomSure, jamais recopiée : une URL, un
+         préfixe de bucket ou un nom nu donnent tous la même clé sûre. */
+      const cle = nomSure(data.stored_name);
+      if (!cle) throw new ErreurHttp(400, "Fichier non reconnu.");
+      /* Deux emplacements possibles, tous deux contraints : la photo de flotte
+         dans le bucket public, la pièce de dossier dans le bucket privé. */
+      const nomFichier = cle.split("/").pop() as string;
+      const cibles = [
+        { bucket: BUCKET_PHOTOS, cle: `${BUCKET_PHOTOS}/${nomFichier}` },
+        { bucket: BUCKET, cle: `${BUCKET}/${nomFichier}` },
+        { bucket: BUCKET, cle: `${BUCKET}/reservations/${nomFichier}` },
+      ];
 
       /* Appel brut plutôt que storage.remove() : Supabase répond 400 si un
          DELETE arrive avec un Content-Type JSON mais sans corps. On contrôle
          donc les en-têtes, et on ne considère la suppression acquise que si
          le stockage a réellement confirmé. */
-      const base = (Deno.env.get("SUPABASE_URL") || "") + `/storage/v1/object/${BUCKET}/`;
+      const racine = Deno.env.get("SUPABASE_URL") || "";
       const entetes = {
         apikey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
         Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""}`,
       };
       let supprime = false;
-      for (const chemin of candidats) {
-        const r = await fetch(base + chemin, { method: "DELETE", headers: entetes });
+      for (const { bucket, cle: chemin } of cibles) {
+        const r = await fetch(`${racine}/storage/v1/object/${bucket}/${chemin}`, {
+          method: "DELETE",
+          headers: entetes,
+        });
         if (r.ok || r.status === 404) supprime = true;
       }
       return json({ ok: true, supprime });
@@ -55,8 +63,8 @@ Deno.serve((requete) =>
       const chemins: string[] = [];
       for (const dataUrl of data.photos.slice(0, 12)) {
         try {
-          const f = await envoyer(client, valider(dataUrl, { max: MAX_PHOTO }));
-          chemins.push(f.chemin);
+          const f = await envoyer(client, valider(dataUrl, { max: MAX_PHOTO, sousDossier: "photos" }));
+          chemins.push(cheminPublic("photos", f.nom));
         } catch (e) {
           avertissements.push(e.message);
         }

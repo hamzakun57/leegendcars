@@ -70,7 +70,12 @@ try {
       try {
         const flotte = await window.LCData.vehicles();
         note("lecture de la flotte", Array.isArray(flotte.vehicles), flotte.vehicles.length + " vehicule(s)");
-        const v = flotte.vehicles[0];
+        /* Le véhicule de travail, et non le premier venu : la base est celle de
+           l'agence, elle contient ses véhicules, aux prix que l'agence a
+           choisis. Les montants attendus ci-dessous n'ont de sens qu'avec
+           celui-ci (500 MAD, puis 400 à partir de sept jours). */
+        const v = flotte.vehicles.find((x) => x.slug === "${VEHICULE}") || flotte.vehicles[0];
+        note("vehicule de travail present", !!v && v.slug === "${VEHICULE}", v ? v.slug : "absent");
         note("forme publique (camelCase)", !!v && v.priceFrom !== undefined && Array.isArray(v.gallery) && Array.isArray(v.tiers));
 
         const p = await window.LCData.pricing({ vehicle: v.slug, from: "2026-11-02", to: "2026-11-09", babySeat: 0 });

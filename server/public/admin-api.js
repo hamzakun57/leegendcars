@@ -965,11 +965,21 @@
   const VEH_BOOL = ["active", "en_service"];
   const VEH_JSON = ["description", "ideal_for", "gallery", "tiers"];
 
-  /* Un chemin de photo n'est accepté que s'il est relatif et sans « .. » :
-     ces valeurs finissent dans un attribut src. */
+  /* Une photo est acceptée si elle est soit un chemin relatif sûr (pièces de
+     dossier, ancien format), soit une URL du CDN de notre projet : ces
+     valeurs finissent dans un attribut src, on refuse donc tout ce qui
+     pointerait ailleurs. */
   const CHEMIN_SUR = /^(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._\-/]+$/;
+  const CDN = new RegExp(
+    "^https://" +
+      String(CFG.supabaseUrl || "").replace(/^https?:\/\//, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&") +
+      "/storage/v1/object/public/photos/photos/[A-Za-z0-9._-]+\\.(?:jpg|jpeg|png|webp)$",
+    "i",
+  );
   const cheminSur = (p) =>
-    typeof p === "string" && p.length < 300 && !p.includes("://") && !p.startsWith("/") && CHEMIN_SUR.test(p);
+    typeof p === "string" &&
+    p.length < 300 &&
+    (CHEMIN_SUR.test(p) ? !p.includes("://") && !p.startsWith("/") : CDN.test(p));
 
   function nettoyerVehicule(entree) {
     const out = {};

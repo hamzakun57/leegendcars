@@ -10,6 +10,13 @@
 
 export const BUCKET = "uploads";
 
+/* Photos de flotte : bucket public, séparé des pièces de dossier. Le premier
+   contenait tout ; sur Netlify il n'y a plus de serveur pour les servir, donc
+   la vitrine de l.Positive était invisible. Les documents des clients, eux,
+   doivent rester hors de portée : ils ne quittent pas « uploads ». */
+export const BUCKET_PHOTOS = "photos";
+const DOSSIER_PHOTOS = "photos";
+
 /* Les chemins publics et les clés de stockage commencent tous deux par
    « uploads/ » : c'est ce qui permet à l'admin d'afficher /uploads/… sans
    changement et à la base de ne retenir que le nom du fichier.
@@ -102,7 +109,18 @@ export function valider(dataUrl: unknown, { max = MAX_DOC, allowPdf = false, sou
   const ext = signature ? signature.ext : ".pdf";
   const mime = signature ? signature.mime : "application/pdf";
   const nom = `${Date.now().toString(36)}-${jeton(12)}${ext}`;
-  const chemin = sousDossier ? `${BUCKET}/${sousDossier}/${nom}` : `${BUCKET}/${nom}`;
+  /* Le nom de bucket fait déjà partie de la clé (cf. PREFIXE) : même règle ici,
+   sinon l'image serait cherchée à un emplacement qui n'a jamais existé. */
+/* Même convention que PREFIXE : la clé porte le nom du bucket, une fois.
+     Pour « photos », la clé est donc « photos/<nom> » — l'URL publique se
+     compose ensuite bucket + clé, d'où « /public/photos/photos/<nom> ».
+     Un niveau de trop et l'image est introuvable, sans la moindre erreur. */
+const bucket = sousDossier === DOSSIER_PHOTOS ? BUCKET_PHOTOS : BUCKET;
+  const chemin = sousDossier === DOSSIER_PHOTOS
+    ? `${bucket}/${nom}`
+    : sousDossier
+      ? `${bucket}/${sousDossier}/${nom}`
+      : `${bucket}/${nom}`;
   return { nom, chemin, mime, taille: contenu.length, contenu };
 }
 
@@ -114,22 +132,79 @@ function jeton(longueur: number): string {
 
 /** Envoie un fichier validé dans le bucket. */
 export async function envoyer(client: any, fichier: FichierValide): Promise<FichierValide> {
-  const { error } = await client.storage.from(BUCKET).upload(fichier.chemin, fichier.contenu, {
+  const bucket = fichier.chemin.startsWith(`${BUCKET_PHOTOS}/`) ? BUCKET_PHOTOS : BUCKET;
+  const { error } = await client.storage.from(bucket).upload(fichier.chemin, fichier.contenu, {
     contentType: fichier.mime,
     upsert: false,
   });
   if (error) throw new Error("Stockage refusé : " + error.message);
+
+  /* Le stockage accuse réception sans toujours écrire : l'envoi paraissait
+     réussi alors que l'image n'existait pas, et le site montrait des photos
+     cassées. On relit donc la liste du dossier pour ne rapporter un succès
+     que sur un fichier réellement présent. */
+  const barre = fichier.chemin.lastIndexOf("/");
+  const dossier = barre >= 0 ? fichier.chemin.slice(0, barre) : "";
+  const attendu = fichier.chemin.slice(barre + 1);
+  const { data: presents, error: e2 } = await client.storage.from(bucket).list(dossier, { limit: 1000 });
+  if (e2) throw new Error("Stockage illisible : " + e2.message);
+  if (!Array.isArray(presents) || !presents.some((o) => o.name === attendu)) {
+    throw new Error(`Le fichier ${attendu} n'a pas pu être enregistré.`);
+  }
   return fichier;
 }
 
-/** Chemin public conservé en base et affiché dans l'admin. */
-export const cheminPublic = (sousDossier: string, nom: string) =>
-  sousDossier ? `${BUCKET}/${sousDossier}/${nom}` : `${BUCKET}/${nom}`;
+/**
+ * Chemin public conservé en base et affiché dans l'admin.
+ *
+ * Les photos de flotte sont servies par le CDN : le chemin devient une URL
+ * absolue, sinon le navigateur chercherait « photos/… » sur le site lui-même
+ * et n'obtiendrait jamais d'image. Les pièces de dossier, privées, gardent un
+ * chemin relatif — l'ancien serveur les lisait, et seul lui y a accès.
+ */
+export const cheminPublic = (sousDossier: string, nom: string) => {
+  /* Bucket « photos », clé « photos/<nom> » : l'URL porte donc les deux. */
+  if (sousDossier === DOSSIER_PHOTOS) {
+    const cle = `${BUCKET_PHOTOS}/${sousDossier}/${nom}`;
+    return `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/${cle}`;
+  }
+  return sousDossier ? `${BUCKET}/${sousDossier}/${nom}` : `${BUCKET}/${nom}`;
+};
 
-/** Nom de fichier strictement vérifié : rien d'autre ne peut être supprimé. */
+/**
+ * Normalise un nom de fichier en clé de stockage, ou renvoie null.
+ *
+ * Le contrat ne change pas : « photo.jpg » → « uploads/photo.jpg ». Deux formes
+ * supplémentaires sont désormais admises, toutes deux strictly encadrées :
+ *   - une clé de pièce de dossier déjà préfixée (« uploads/reservations/… ») ;
+ *   - l'URL publique d'une photo de flotte, dont on ne garde que la clé.
+ *
+ * Aucun segment « .. », aucun préfixe inconnu : la valeur renvoyée est
+ * reconstruite, jamais recopiée telle quelle.
+ */
 export function nomSure(nom: unknown): string | null {
-  if (typeof nom !== "string") return null;
-  const relatif = nom.startsWith(`${BUCKET}/`) ? nom.slice(BUCKET.length + 1) : nom;
-  if (!/^(reservations\/)?[\w-]+\.(jpg|png|webp|pdf)$/.test(relatif)) return null;
-  return `${BUCKET}/${relatif}`;
+  if (typeof nom !== "string" || !nom || nom.length > 300) return null;
+  /* URL publique d'une photo de flotte → sa clé de stockage. */
+  const brut = nom.includes("/storage/v1/object/public/")
+    ? nom.split("/storage/v1/object/public/")[1]
+    : nom;
+  if (brut.includes("..") || brut.includes("//")) return null;
+
+  const segments = brut.split("/").filter(Boolean);
+  const dernier = segments[segments.length - 1] || "";
+  if (!/^[\w-]+\.(jpg|jpeg|png|webp|pdf)$/.test(dernier)) return null;
+
+  /* Le nom du bucket peut déjà être là ou pas : on le retire pour raisonner
+     ensuite uniquement sur le dossier et le fichier. */
+  let bucket = BUCKET;
+  let reste = segments;
+  if (segments[0] === BUCKET || segments[0] === BUCKET_PHOTOS) {
+    bucket = segments[0];
+    reste = segments.slice(1);
+  }
+
+  if (reste.length === 1) return `${bucket}/${reste[0]}`;
+  if (reste.length === 2 && reste[0] === "reservations") return `${bucket}/reservations/${reste[1]}`;
+  if (reste.length === 2 && reste[0] === DOSSIER_PHOTOS) return `${BUCKET_PHOTOS}/${reste[1]}`;
+  return null;
 }
