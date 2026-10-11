@@ -74,3 +74,9 @@
   for = "/"
   [headers.values]
     Cache-Control = "no-cache"
+
+[[headers]]
+  for = "/signature.html"
+  [headers.values]
+    Cache-Control = "no-cache"
+    X-Robots-Tag = "noindex, nofollow"

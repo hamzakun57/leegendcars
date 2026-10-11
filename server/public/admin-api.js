@@ -727,9 +727,13 @@
         signature_requested_at: maintenant, updated_at: maintenant,
         contract_number: d.contract_number || d.ref,
       }).eq("id", seg[3]);
-      /* Le lien est celui de la fonction de signature : le client n'a besoin
-         ni d'un compte, ni d'un serveur. */
-      const url = `${CFG.supabaseUrl}/functions/v1/signature/${token}`;
+      /* Le lien pointe vers /signature.html du site (Netlify), qui récupère les
+         données de la réservation en JSON auprès de l'Edge Function, puis affiche
+         le formulaire de signature dans une vraie page HTML.
+         On évite ainsi le lien direct vers l'Edge Function qui posait des problèmes
+         de Content-Type et d'encodage dans la passerelle Supabase. */
+      const siteOrigin = location.origin;
+      const url = `${siteOrigin}/signature.html?token=${encodeURIComponent(token)}`;
       return { token, url, status: "pending" };
     }
 

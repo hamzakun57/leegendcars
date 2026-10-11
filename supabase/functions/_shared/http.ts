@@ -29,7 +29,18 @@ export function json(data: unknown, status = 200): Response {
 
 export function html(contenu: string): Response {
   return new Response(contenu, {
-    headers: { ...CORS, "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" },
+    headers: {
+      ...CORS,
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "no-store",
+      /* La passerelle sert en text/plain et confine la page dès qu'elle ne
+         voit pas de politique de sécurité de contenu explicite : le client
+         recevait le code source de la page de signature au lieu de la page.
+         On déclare donc une politique qui autorise exactement ce qu'elle
+         utilise — un style en ligne, un canevas, et le script local. */
+      "Content-Security-Policy":
+        "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; form-action 'none'; base-uri 'none'",
+    },
   });
 }
 

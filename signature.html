@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Signature du contrat — Leegend Cars</title>
+<!-- Config Supabase (supabaseUrl + supabaseAnonKey) chargée en premier -->
+<script src="/admin-assets/admin-config.js"></script>
+<style>
+  :root { color-scheme: light }
+  * { box-sizing: border-box; margin: 0; padding: 0 }
+  body { font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; background: #f4f6f8; color: #15181d }
+  .page { max-width: 640px; margin: 0 auto; padding: 24px 18px 60px }
+  header { display: flex; align-items: center; gap: 14px; margin-bottom: 22px }
+  .mark { width: 44px; height: 44px; border-radius: 12px; background: #c8331f; color: #fff;
+          display: grid; place-items: center; font-weight: 900; font-size: 1rem; flex-shrink: 0 }
+  h1 { font-size: 1.35rem }
+  .sub { color: #5a6069; font-size: .9rem }
+  .card { background: #fff; border: 1px solid #e2e6ec; border-radius: 16px; padding: 20px;
+          margin-bottom: 16px; box-shadow: 0 12px 30px -22px #0a0b0e55 }
+  .kv { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0;
+        border-bottom: 1px dashed #e2e6ec; font-size: .95rem }
+  .kv:last-child { border: 0 }
+  .kv span { color: #5a6069 }
+  .kv b { text-align: right }
+  label { display: block; font-weight: 600; margin: 14px 0 6px; font-size: .95rem }
+  input[type=text] { width: 100%; padding: 12px 14px; border: 1px solid #ccd2db;
+                     border-radius: 10px; font-size: 1rem }
+  .pad-wrap { position: relative; margin-top: 4px; border: 1px dashed #ccd2db;
+              border-radius: 12px; overflow: hidden; background: #fff }
+  canvas { display: block; width: 100%; height: 180px; touch-action: none; cursor: crosshair }
+  .pad-hint { position: absolute; inset: 0; display: grid; place-items: center;
+              color: #8b9199; font-size: .9rem; pointer-events: none }
+  .pad-hint.gone { display: none }
+  .hint { color: #8b9199; font-size: .85rem; margin-top: 6px }
+  .row { display: flex; gap: 10px; margin-top: 14px }
+  .btn { padding: 10px 18px; border: 0; border-radius: 10px; background: #e2e6ec;
+         color: #15181d; font: 600 .95rem system-ui; cursor: pointer }
+  .btn-primary { background: #c8331f; color: #fff }
+  .btn:disabled { opacity: .45; cursor: default }
+  .msg { margin-top: 14px; padding: 12px 14px; border-radius: 10px; font-size: .95rem; display: none }
+  .msg.err { display: block; background: #ff443822; border: 1px solid #e2403499; color: #9d1d13 }
+  .msg.ok  { display: block; background: #2fd07a26; border: 1px solid #1cb0658c; color: #045f37 }
+  .frame-wrap { background: #3a3a40; border-radius: 14px; padding: 14px; overflow: auto; margin-top: 16px }
+  iframe { width: 100%; height: 1100px; border: 0; background: #fff; border-radius: 6px; display: block }
+  .loading { text-align: center; padding: 60px 0; color: #5a6069 }
+  .err-page { text-align: center; padding: 60px 16px; color: #9d1d13 }
+  a.back { display: inline-block; margin-top: 14px; color: #c8331f; font-size: .9rem }
+  .signed-box { display: flex; gap: 16px; align-items: center; flex-wrap: wrap }
+  .signed-box img { background: #fff; border-radius: 8px; padding: 6px 10px;
+                    max-width: 260px; max-height: 80px; object-fit: contain }
+</style>
+</head>
+<body>
+<div class="page" id="root">
+  <div class="loading">Chargement…</div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ------------------------------------------------------------------ helpers */
+  var e = function (s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  };
+
+  /* ------------------------------------------------------------------ config
+     LCAdminConfig is loaded by admin-config.js ; on the public site (this page)
+     we load the same file to get the Supabase URL and anon key. */
+  function getConfig() {
+    var cfg = window.LCAdminConfig || {};
+    return {
+      url: cfg.supabaseUrl || "",
+      key: cfg.supabaseAnonKey || "",
+    };
+  }
+
+  var token = (location.search.match(/[?&]token=([^&]+)/) || [])[1] || "";
+  var root  = document.getElementById("root");
+
+  if (!token) {
+    root.innerHTML = '<div class="err-page"><b>Lien invalide.</b><br>Ce lien de signature est incomplet ou corrompu.</div>';
+    return;
+  }
+
+  var cfg = getConfig();
+  if (!cfg.url) {
+    root.innerHTML = '<div class="err-page"><b>Configuration manquante.</b><br>Rechargez la page ou contactez l\'agence.</div>';
+    return;
+  }
+
+  var EDGE = cfg.url + "/functions/v1/signature/" + encodeURIComponent(token);
+
+  /* ------------------------------------------------------------------ fetch dossier */
+  fetch(EDGE, {
+    headers: { "Authorization": "Bearer " + cfg.key, "apikey": cfg.key }
+  })
+  .then(function (r) { return r.json(); })
+  .then(function (data) {
+    if (!data || !data.ok) throw new Error(data && data.error ? data.error : "Lien introuvable ou expiré.");
+    renderPage(data);
+  })
+  .catch(function (err) {
+    root.innerHTML = '<div class="err-page"><b>' + e(err.message || "Erreur.") + '</b><br>Veuillez contacter l\'agence.</div>';
+  });
+
+  /* ------------------------------------------------------------------ render */
+  function renderPage(data) {
+    var d = data.dossier || {};
+    var signedAlready = !!data.signed;
+
+    /* Header */
+    var html = '<header>'
+      + '<div class="mark">LC</div>'
+      + '<div><h1>Signature du contrat</h1>'
+      + '<p class="sub">Contrat ' + e(d.contractNumber) + ' &middot; ' + e(d.brand || "Leegend Cars") + '</p>'
+      + '</div></header>';
+
+    /* Recap card */
+    html += '<div class="card">'
+      + '<div class="kv"><span>Conducteur</span><b>' + e(d.driver) + '</b></div>'
+      + '<div class="kv"><span>Permis</span><b>' + e(d.licence) + '</b></div>'
+      + '<div class="kv"><span>Prise en charge</span><b>' + e(d.pickup) + '</b></div>'
+      + '<div class="kv"><span>Retour</span><b>' + e(d.retour) + '</b></div>'
+      + '</div>';
+
+    if (signedAlready) {
+      /* Already signed */
+      html += '<div class="card"><div class="msg ok" style="display:block">Ce contrat a déjà été signé. Vous pouvez le télécharger ci-dessous.</div></div>';
+    } else {
+      /* Signature form */
+      html += '<div class="card" id="sig-card">'
+        + '<label for="sig-name">Votre nom complet</label>'
+        + '<input type="text" id="sig-name" value="' + e(d.driver) + '" placeholder="Nom et prénom" autocomplete="name">'
+        + '<label for="sig-canvas">Votre signature</label>'
+        + '<div class="pad-wrap">'
+        + '<canvas id="sig-canvas"></canvas>'
+        + '<div class="pad-hint" id="sig-hint">Signez ici avec le doigt ou la souris</div>'
+        + '</div>'
+        + '<p class="hint">Le cadre ci-dessus est votre signature numérique.</p>'
+        + '<div class="row">'
+        + '<button class="btn" id="btn-clear">Effacer</button>'
+        + '<button class="btn btn-primary" id="btn-send" disabled>Envoyer ma signature</button>'
+        + '</div>'
+        + '<div class="msg" id="sig-msg"></div>'
+        + '</div>';
+    }
+
+    /* Contract iframe */
+    html += '<h2 style="color:#5a6069;font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;margin:8px 0 6px">Contrat complet</h2>'
+      + '<div class="frame-wrap"><iframe id="doc-frame" title="Contrat de location"></iframe></div>';
+
+    root.innerHTML = html;
+
+    /* Load contract in iframe via Blob (avoids CORS / content-type issues) */
+    loadContractFrame();
+
+    if (!signedAlready) {
+      bindSignaturePad();
+    }
+  }
+
+  /* ------------------------------------------------------------------ iframe */
+  function loadContractFrame() {
+    fetch(EDGE + "/contrat", {
+      headers: { "Authorization": "Bearer " + cfg.key, "apikey": cfg.key }
+    })
+    .then(function (r) { return r.json(); })
+    .then(function (data) {
+      if (!data || !data.html) return;
+      var blob = new Blob([data.html], { type: "text/html; charset=utf-8" });
+      var burl = URL.createObjectURL(blob);
+      var iframe = document.getElementById("doc-frame");
+      if (!iframe) return;
+      iframe.src = burl;
+      iframe.addEventListener("load", function () { URL.revokeObjectURL(burl); }, { once: true });
+    })
+    .catch(function () { /* iframe stays empty — non-blocking */ });
+  }
+
+  /* ------------------------------------------------------------------ pad */
+  function bindSignaturePad() {
+    var canvas = document.getElementById("sig-canvas");
+    if (!canvas) return;
+    var ctx    = canvas.getContext("2d");
+    var hint   = document.getElementById("sig-hint");
+    var msgEl  = document.getElementById("sig-msg");
+    var btnSend = document.getElementById("btn-send");
+    var btnClear = document.getElementById("btn-clear");
+    var drawing = false;
+    var hasMark = false;
+
+    function resize() {
+      var dpr = Math.max(window.devicePixelRatio || 1, 1);
+      var rect = canvas.getBoundingClientRect();
+      /* Preserve existing drawing on resize */
+      var img = hasMark ? ctx.getImageData(0, 0, canvas.width, canvas.height) : null;
+      canvas.width  = rect.width  * dpr;
+      canvas.height = rect.height * dpr;
+      ctx.scale(dpr, dpr);
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, rect.width, rect.height);
+      ctx.strokeStyle = "#15181d";
+      ctx.lineWidth = 2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      if (img && img.width) ctx.putImageData(img, 0, 0);
+    }
+
+    window.addEventListener("resize", resize);
+    resize();
+
+    function pos(ev) {
+      var p = ev.touches ? ev.touches[0] : ev;
+      var r = canvas.getBoundingClientRect();
+      return { x: p.clientX - r.left, y: p.clientY - r.top };
+    }
+
+    function onDown(ev) {
+      ev.preventDefault();
+      drawing = true;
+      var p = pos(ev);
+      ctx.beginPath();
+      ctx.moveTo(p.x, p.y);
+    }
+    function onMove(ev) {
+      if (!drawing) return;
+      ev.preventDefault();
+      var p = pos(ev);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+      hasMark = true;
+      if (hint) hint.classList.add("gone");
+      if (btnSend) btnSend.disabled = false;
+    }
+    function onUp() { drawing = false; }
+
+    canvas.addEventListener("mousedown",  onDown);
+    canvas.addEventListener("mousemove",  onMove);
+    window.addEventListener("mouseup",    onUp);
+    canvas.addEventListener("touchstart", onDown, { passive: false });
+    canvas.addEventListener("touchmove",  onMove, { passive: false });
+    canvas.addEventListener("touchend",   onUp);
+
+    btnClear && btnClear.addEventListener("click", function () {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, canvas.width / (window.devicePixelRatio || 1), canvas.height / (window.devicePixelRatio || 1));
+      hasMark = false;
+      if (hint) hint.classList.remove("gone");
+      if (btnSend) btnSend.disabled = true;
+      say("", "");
+    });
+
+    btnSend && btnSend.addEventListener("click", function () {
+      var name = (document.getElementById("sig-name") || {}).value || "";
+      name = name.trim();
+      if (name.length < 3) { say("Merci d'indiquer votre nom complet.", "err"); return; }
+      if (!hasMark)        { say("La zone de signature est vide.", "err"); return; }
+      btnSend.disabled = true;
+      btnSend.textContent = "Enregistrement…";
+      var sigData = canvas.toDataURL("image/png");
+      fetch(EDGE, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + cfg.key,
+          "apikey": cfg.key,
+        },
+        body: JSON.stringify({ name: name, signature: sigData }),
+      })
+      .then(function (r) { return r.json(); })
+      .then(function (j) {
+        if (!j || !j.ok) throw new Error(j && j.error ? j.error : "Envoi refusé.");
+        say("Merci, votre signature a été enregistrée. Le contrat est mis à jour.", "ok");
+        btnSend.textContent = "Signature envoyée ✓";
+        loadContractFrame();
+      })
+      .catch(function (err) {
+        say(err.message || "Envoi impossible.", "err");
+        btnSend.disabled = false;
+        btnSend.textContent = "Envoyer ma signature";
+      });
+    });
+
+    function say(text, kind) {
+      if (!msgEl) return;
+      msgEl.textContent = text;
+      msgEl.className = "msg" + (kind ? " " + kind : "");
+    }
+  }
+
+})();
+</script>
+</body>
+</html>

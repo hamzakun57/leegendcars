@@ -452,7 +452,10 @@ api.get("/admin/reservations/:id/contract", requireAdmin, h(async (req, res) => 
   }
   const fresh = await getDossier(id);
   const vehicle = fresh.vehicle_slug ? await getVehicle(fresh.vehicle_slug) : null;
-  res.type("html").send(contractHtml(fresh, vehicle));
+  /* On renvoie { __html, __type:"html" } au lieu du HTML brut pour que
+     admin.js (ouvrirDocument) puisse ouvrir via Blob URL dans les deux modes
+     (Express et Supabase), sans about:blank. */
+  res.json({ __html: contractHtml(fresh, vehicle), __type: "html" });
 }));
 
 api.get("/admin/reservations/:id/invoice", requireAdmin, h(async (req, res) => {
@@ -467,7 +470,7 @@ api.get("/admin/reservations/:id/invoice", requireAdmin, h(async (req, res) => {
   }
   const fresh = await getDossier(id);
   const vehicle = fresh.vehicle_slug ? await getVehicle(fresh.vehicle_slug) : null;
-  res.type("html").send(invoiceHtml(fresh, vehicle));
+  res.json({ __html: invoiceHtml(fresh, vehicle), __type: "html" });
 }));
 
 /* ---------- signature client ---------- */

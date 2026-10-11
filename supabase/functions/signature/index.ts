@@ -37,6 +37,11 @@ Deno.serve((requete) =>
     const token = segments[1] || "";
     const action = segments[2] || "";
 
+    /* La passerelle de Supabase sert tout ce qui ressemble à du HTML en
+       « text/plain », avec une politique de sécurité qui vide la page : le
+       client ne recevait que le code source. Cette fonction ne renvoie donc
+       plus de HTML — elle renvoie du JSON, et c'est la page /signature.html
+       du site qui l'affiche. Le HTML du contrat, lui, part dans un Blob. */
     if (requete.method === "GET" && (action === "" || action === "page")) {
       const r = await parToken(client, token);
       if (!r) throw new ErreurHttp(404, "Lien de signature introuvable ou expiré.");
@@ -48,21 +53,21 @@ Deno.serve((requete) =>
         ? await client.from("vehicles").select("*").eq("slug", r.vehicle_slug).maybeSingle()
         : { data: null };
 
-      const dossier = {
-        ...r,
-        options: {},
-        equipment: {},
-        paymentModeLabel: "Espèce",
-        insurance: r.insurance || "Normale",
-        contractNumber: r.contract_number || r.ref,
-        payments: [],
-        attachments: [],
-        dossierOpen: true,
-        kmDone: 0,
-      };
-
-      if (action === "page") return html(contractHtml(dossier, vehicule, { toolbar: false }));
-      return html(pageSignature(r, vehicule, token, clePublique()));
+      return json({
+        ok: true,
+        token,
+        cle: clePublique(),
+        dossier: {
+          ref: r.ref,
+          contractNumber: r.contract_number || r.ref,
+          driver: [r.first_name, r.last_name].filter(Boolean).join(" "),
+          licence: r.licence_number || "",
+          pickup: [r.pickup, r.pickup_date].filter(Boolean).join(" · "),
+          retour: [r.ret, r.return_date].filter(Boolean).join(" · "),
+          vehicle: vehicule ? [vehicule.name, vehicule.matricule].filter(Boolean).join(" · ") : r.vehicle_slug || "",
+          brand: vehicule ? String(vehicule.brand || "Leegend Cars") : "Leegend Cars",
+        },
+      });
     }
 
     if (requete.method === "GET" && action === "contrat") {
@@ -71,7 +76,7 @@ Deno.serve((requete) =>
       const { data: vehicule } = r.vehicle_slug
         ? await client.from("vehicles").select("*").eq("slug", r.vehicle_slug).maybeSingle()
         : { data: null };
-      return html(contractHtml({ ...r, dossierOpen: true }, vehicule, { toolbar: false }));
+      return json({ ok: true, html: contractHtml({ ...r, dossierOpen: true }, vehicule, { toolbar: false }) });
     }
 
     if (requete.method === "POST") {

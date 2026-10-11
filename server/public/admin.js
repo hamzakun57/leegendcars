@@ -51,20 +51,27 @@
 
   /* Le contrat et la facture s'ouvrent dans un onglet. Deux réalités :
 
-   - avec le serveur (local), l'adresse /api/… rend directement le document ;
-   - sur Netlify il n'y a plus de serveur et cette adresse n'existe pas : le
-     navigateur y affichait « Page not found ». L'adaptateur sait alors générer
-     le document et l'ouvre lui-même.
+   - avec le serveur (local), la route renvoie désormais { __html, __type:"html" }
+     (JSON) pour que l'adaptateur et le navigateur se comportent de la même façon ;
+   - sur Netlify, l'adaptateur (admin-api.js) appelle l'Edge Function et renvoie
+     également { __html, __type:"html" }.
 
-   Un lien <a href> ne peut pas couvrir les deux : il faut passer par l'appel. */
-  function ouvrirDocument(url) {
-    if (window.LCAdmin && window.LCAdmin.mode === "supabase") {
-      return api(url).catch((e) => {
-        flash(e.message, "err");
-      });
+   Dans les deux cas on crée un Blob URL pour ouvrir le HTML dans un onglet,
+   sans jamais naviguer vers une adresse qui n'existe pas côté Netlify. */
+  async function ouvrirDocument(url) {
+    try {
+      const res = await api(url);
+      const htmlStr = (res && res.__type === "html" && res.__html) ? res.__html
+                    : (typeof res === "string" ? res : null);
+      if (!htmlStr) { flash("Impossible d'ouvrir le document.", "err"); return; }
+      const blob   = new Blob([htmlStr], { type: "text/html; charset=utf-8" });
+      const blobUrl = URL.createObjectURL(blob);
+      const win = window.open(blobUrl, "_blank", "noopener");
+      if (win) win.addEventListener("load", () => URL.revokeObjectURL(blobUrl), { once: true });
+      else URL.revokeObjectURL(blobUrl);
+    } catch (e) {
+      flash(e.message || "Erreur lors de l'ouverture du document.", "err");
     }
-    window.open(url, "_blank", "noopener");
-    return Promise.resolve();
   }
 
   const flash = (text, kind = "ok") => {
