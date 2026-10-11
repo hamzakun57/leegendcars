@@ -49,7 +49,8 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 .fv-head__left{flex:1}
 .fv-head__mid{text-align:center;width:120px}
 .fv-head__right{flex:1;text-align:right;font-size:8pt;line-height:1.5}
-.ct-logo{display:block;margin:0 auto 2px}
+.ct-logo{display:block;position:relative;width:75px;height:53px;overflow:hidden;margin:0 auto 2px}
+.ct-logo img{position:absolute;left:50%;top:47.5%;width:115px;height:115px;transform:translate(-50%,-50%);max-width:none}
 .fv-title{font-weight:700;font-size:14pt;letter-spacing:.06em}
 .fv-number{margin-top:3px;border:1.5px solid #111;border-radius:3px;padding:6px 10px;
   font-weight:700;font-size:12pt;letter-spacing:.12em;display:inline-block;min-width:190px;text-align:center}
