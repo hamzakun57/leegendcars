@@ -85,10 +85,14 @@ for (const f of ["vendor/supabase.js", "server/public/admin-config.js", "server/
 check("adaptateur présent", !!w.LCAdmin);
 check("mode « supabase »", w.LCAdmin?.mode === "supabase", w.LCAdmin?.mode);
 
+/* Déclaré hors du bloc d'essai : le finally doit pouvoir nettoyer même si le
+   test échoue avant la création du véhicule de travail. */
+let voitureCreee = null;
+
 try {
   /* Connexion : elle seule passe par l'adaptateur (le serveur a son ancien
      mécanisme, volontairement conservé). */
-  const connexion = await w.eval(`window.LCAdmin.api("/api/admin/login", { method: "POST", body: JSON.stringify({ email: ${JSON.stringify(EMAIL)}, password: ${JSON.stringify(PASS)} }) })`);
+  const connexion = await w.eval(`window.LCAdmin.api("/api/admin/login", { method: "POST", body: { email: ${JSON.stringify(EMAIL)}, password: ${JSON.stringify(PASS)} } })`);
   check("connexion administrateur", connexion && connexion.ok === true);
 
   const moi = await fetch(`${B}/api/admin/me`, { headers: { cookie: cookieServeur } }).then((r) => r.json());
@@ -121,6 +125,8 @@ try {
      puis on la supprime. */
   const brut = await fetch(`${B}/api/admin/vehicles`, { headers: { cookie: cookieServeur } });
   const flotte = await brut.json();
+  /* Déclaré ici : le finally doit pouvoir le nettoyer même si le test échoue
+     avant la création de la réservation. */
   let nomVoiture = flotte.vehicles && flotte.vehicles[0] ? flotte.vehicles[0].slug : null;
   if (!nomVoiture) {
     const r = await fetch(`${B}/api/admin/vehicles`, {
@@ -128,9 +134,9 @@ try {
       headers: { cookie: cookieServeur, "Content-Type": "application/json" },
       body: JSON.stringify({ name: `Adaptateur ${Date.now()}`, price_from: 500 }),
     });
-    nomVoiture = (await r.json()).vehicle.slug;
+    voitureCreee = (await r.json()).vehicle.slug;
+    nomVoiture = voitureCreee;
   }
-
   const creation = await fetch(`${B}/api/admin/reservations`, {
     method: "POST",
     headers: { cookie: cookieServeur, "Content-Type": "application/json" },
@@ -169,10 +175,37 @@ try {
       method: "PATCH", headers: { cookie: cookieServeur, "Content-Type": "application/json" },
       body: JSON.stringify({ kms_depart: 10, kms_return: 90, internal_notes: "comparaison" }),
     }).then((r) => r.json());
-    const nouveauApres = await w.eval(`window.LCAdmin.api("/api/admin/reservations/${id}", { method: "PATCH", body: JSON.stringify({ kms_depart: 10, kms_return: 90, internal_notes: "comparaison" }) })`);
+    const nouveauApres = await w.eval(`window.LCAdmin.api("/api/admin/reservations/${id}", { method: "PATCH", body: { kms_depart: 10, kms_return: 90, internal_notes: "comparaison" } })`);
     check("PATCH dossier — même forme", comparer(ancienApres.reservation, nouveauApres.reservation).ok,
       JSON.stringify(comparer(ancienApres.reservation, nouveauApres.reservation).manquants.slice(0, 5)));
     check("PATCH dossier — km identique", ancienApres.reservation.kmDone === nouveauApres.reservation.kmDone, `${ancienApres.reservation.kmDone} vs ${nouveauApres.reservation.kmDone}`);
+
+    /* Création d'un véhicule par l'écran d'édition, avec un corps objet : c'est
+       exactement ce que fait admin.js. Le test passa par l'API du serveur, il
+       ne verrait donc jamais une régression de l'adaptateur sur cette route —
+       celle qui a produit « [object Object] is not valid JSON » à l'écran. */
+    const fiche = { name: `Saisie ${Date.now()}`, price_from: 750, deposit: 5000, transmission: "Automatique", gallery: [] };
+    const ficheServeur = await fetch(`${B}/api/admin/vehicles`, {
+      method: "POST", headers: { cookie: cookieServeur, "Content-Type": "application/json" },
+      body: JSON.stringify(fiche),
+    }).then((r) => r.json());
+    /* Même nom des deux côtés : on libère d'abord le slug pris par le
+       serveur, puis on rejoue la création à l'identique via l'adaptateur. */
+    await fetch(`${B}/api/admin/vehicles/${ficheServeur.vehicle.slug}`, { method: "DELETE", headers: { cookie: cookieServeur } });
+    const ficheAdaptateur = await w.eval(
+      `window.LCAdmin.api("/api/admin/vehicles", { method: "POST", body: ${JSON.stringify(fiche)} })`,
+    );
+    check("création véhicule — corps objet accepté", !!ficheAdaptateur.vehicle, JSON.stringify(ficheAdaptateur).slice(0, 120));
+    check("création véhicule — mêmes champs", comparer(ficheServeur.vehicle, ficheAdaptateur.vehicle).ok,
+      JSON.stringify(comparer(ficheServeur.vehicle, ficheAdaptateur.vehicle).enTrop.slice(0, 5)));
+
+    /* Un véhicule sans photo ne doit produire ni « undefined » ni image cassée. */
+    check("création véhicule — galerie vide acceptée",
+      Array.isArray(ficheAdaptateur.vehicle.gallery) && ficheAdaptateur.vehicle.gallery.length === 0,
+      JSON.stringify(ficheAdaptateur.vehicle.gallery));
+
+    await w.eval(`window.LCAdmin.api("/api/admin/vehicles/${ficheAdaptateur.vehicle.slug}", { method: "DELETE" })`).catch(() => {});
+    await fetch(`${B}/api/admin/vehicles/${ficheServeur.vehicle.slug}`, { method: "DELETE", headers: { cookie: cookieServeur } }).catch(() => {});
 
     await fetch(`${B}/api/admin/reservations/${id}`, { method: "DELETE", headers: { cookie: cookieServeur } });
   } else {
@@ -181,6 +214,12 @@ try {
 } catch (e) {
   check("erreur inattendue", false, e.message);
 } finally {
+  /* La voiture de travail n'est créée que si le parc est vide : sans ce
+     nettoyage, chaque passage laissait un véhicule « Adaptateur <date> » dans
+     la base de l'agence. */
+  if (voitureCreee) {
+    await fetch(`${B}/api/admin/vehicles/${voitureCreee}`, { method: "DELETE", headers: { cookie: cookieServeur } }).catch(() => {});
+  }
   await deleteUser(VIEUX).catch(() => {});
   console.log(`\n${pass} reussis, ${fail} echecs`);
   await closeDb();

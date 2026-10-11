@@ -62,127 +62,14 @@
     },
   ];
 
-  const VEHICLES = [
-    {
-      id: "mercedes-a-class",
-      slug: "mercedes-a-class",
-      name: "Mercedes A-Class",
-      tagline: "Berline premium · Automatique",
-      transmission: "Automatique",
-      fuel: "Essence",
-      doors: 5,
-      seats: 5,
-      priceFrom: 900,
-      deposit: 7500,
-      approx: 83,
-      badge: "Premium",
-      accent:
-        "radial-gradient(ellipse at 50% 70%, rgba(122,18,10,0.32), transparent 65%)",
-      gallery: [
-        "cars/Mercedes/Mercedes_pic1.jpg",
-        "cars/Mercedes/Mercedes_pic2.jpg",
-        "cars/Mercedes/Mercedes_pic3.jpg",
-        "cars/Mercedes/Mercedes_pic4.jpg",
-        "cars/Mercedes/Mercedes_pic5.jpg",
-      ],
-      description: [
-        "La Mercedes A-Class allie élégance et confort : un intérieur soigné, une boîte automatique fluide et une tenue de route remarquable, idéale pour rouler avec style à Tanger comme sur la route de la côte.",
-        "Premium, silencieuse et agréable à conduire, elle convient aux séjours exigeants comme aux transferts aéroport jusqu'à votre hôtel.",
-      ],
-      idealFor: [
-        "Arrivées VIP & transferts aéroport",
-        "Couples et voyageurs exigeants",
-        "Locations courtes et moyennes",
-      ],
-      tiers: [
-        { label: "1 à 2 jours", days: 1, price: 900 },
-        { label: "3 à 6 jours", days: 3, price: 850 },
-        { label: "7 à 13 jours", days: 7, price: 800 },
-        { label: "14 à 29 jours", days: 14, price: 750 },
-        { label: "30 jours et plus", days: 30, price: 700 },
-      ],
-    },
-    {
-      id: "vw-t-roc-r-line",
-      slug: "vw-t-roc-r-line",
-      name: "Volkswagen T-Roc R-Line",
-      tagline: "SUV compact · Pack R-Line",
-      transmission: "Automatique",
-      fuel: "Essence",
-      doors: 5,
-      seats: 5,
-      priceFrom: 800,
-      deposit: 5000,
-      approx: 74,
-      badge: "SUV",
-      accent:
-        "radial-gradient(ellipse at 50% 70%, rgba(167,17,7,0.28), transparent 65%)",
-      gallery: [
-        "cars/volkswagen/volkswagen_pic1.jpg",
-        "cars/volkswagen/volkswagen_pic2.jpg",
-        "cars/volkswagen/volkswagen_pic3.jpg",
-        "cars/volkswagen/volkswagen_pic4.jpg",
-        "cars/volkswagen/volkswagen_pic5.jpg",
-        "cars/volkswagen/volkswagen_pic6.jpg",
-      ],
-      description: [
-        "Le Volkswagen T-Roc Pack R-Line est un compact SUV au style affirmé : finitions R-Line, position de conduite haute et boîte automatique pour une conduite facile en ville comme sur l'autoroute.",
-        "Confortable, polyvalent et sobre, il est parfait pour explorer le Nord du Maroc, de Tanger à Chefchaouen.",
-      ],
-      idealFor: [
-        "Couples et petites familles",
-        "Road trips le long de la côte",
-        "Budget maîtrisé sans renoncer au style",
-      ],
-      tiers: [
-        { label: "1 à 2 jours", days: 1, price: 800 },
-        { label: "3 à 6 jours", days: 3, price: 760 },
-        { label: "7 à 13 jours", days: 7, price: 720 },
-        { label: "14 à 29 jours", days: 14, price: 680 },
-        { label: "30 jours et plus", days: 30, price: 640 },
-      ],
-    },
-    {
-      id: "cupra-formentor",
-      slug: "cupra-formentor",
-      name: "Cupra Formentor",
-      tagline: "SUV coupé sportif · Automatique",
-      transmission: "Automatique",
-      fuel: "Essence",
-      doors: 5,
-      seats: 5,
-      priceFrom: 1000,
-      deposit: 10000,
-      approx: 92,
-      badge: "Sport",
-      accent:
-        "radial-gradient(ellipse at 50% 70%, rgba(188,39,22,0.25), transparent 65%)",
-      gallery: [
-        "cars/cupra/cupra_pic1.jpg",
-        "cars/cupra/cupra_pic2.jpg",
-        "cars/cupra/cupra_pic3.jpg",
-        "cars/cupra/cupra_pic4.jpg",
-        "cars/cupra/cupra_pic5.jpg",
-      ],
-      description: [
-        "La Cupra Formentor est notre SUV coupé le plus sportif : lignes affirmées, intérieur premium et conduite dynamique avec boîte automatique.",
-        "Idéale pour ceux qui veulent du caractère et du confort sur la route, entre Tanger, Tétouan et les routes panoramiques du Rif.",
-      ],
-      idealFor: [
-        "Passionnés de conduite",
-        "Sorties, événements et weekends",
-        "Locations courtes et moyennes",
-      ],
-      tiers: [
-        { label: "1 à 2 jours", days: 1, price: 1000 },
-        { label: "3 à 6 jours", days: 3, price: 950 },
-        { label: "7 à 13 jours", days: 7, price: 900 },
-        { label: "14 à 29 jours", days: 14, price: 850 },
-        { label: "30 jours et plus", days: 30, price: 800 },
-      ],
-    },
-  ];
+  /* La flotte vit dans la base : elle est saisie dans le back-office et lue
+     par le navigateur. Cette liste n'était qu'un jeu de démonstration ; la
+     laisser ici affichait trois voitures qui n'existent pas, y compris quand
+     l'internaute parcourt le site hors connexion.
 
+     Un parc vide est un état normal : les pages affichent alors un message
+     d'attente plutôt que des modèles imaginaires. */
+  const VEHICLES = [];
   const TRUST = [
     {
       icon: "shield",

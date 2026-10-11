@@ -974,7 +974,21 @@
     api: async (chemin, opts = {}) => {
       if (MODE !== "supabase") throw new Error("Adaptateur inactif en mode « api ».");
       const methode = opts.method || "GET";
-      const corps = opts.body ? JSON.parse(opts.body) : null;
+      /* admin.js envoie un objet dans « body » ; le serveur, lui, attendait
+         une chaîne. On accepte les deux : JSON.parse sur un objet échouerait
+         avec « [object Object] is not valid JSON ». */
+      let corps = null;
+      if (opts.body !== undefined && opts.body !== null) {
+        if (typeof opts.body === "string") {
+          try {
+            corps = JSON.parse(opts.body);
+          } catch (e) {
+            throw new Error("Requête illisible.");
+          }
+        } else {
+          corps = opts.body;
+        }
+      }
       const resultat = await router(methode, chemin, corps, opts);
       /* Les documents sont renvoyés à part : ils s'affichent dans un onglet,
          pas dans le flux JSON de l'écran. */

@@ -1,0 +1,20 @@
+# Ce que Netlify publie réellement.
+#
+# La racine du dépôt sert de dossier de publication : tout ce qui n'est pas
+# listé ici part en ligne. Le serveur Express n'est pas déployé (le navigateur
+# parle directement à Supabase), les scripts non plus.
+node_modules
+supabase/functions
+
+# Code serveur : jamais utile en ligne, et inutile d'exposer.
+server
+scripts
+
+# Documentation et fichiers de travail
+docs
+*.md
+.env
+.env.*
+!.env.example
+.git
+.DS_Store

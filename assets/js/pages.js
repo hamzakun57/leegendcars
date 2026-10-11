@@ -32,6 +32,28 @@
     `<a class="btn ${cls || "btn--primary"}" href="tel:${CFG.phonePrimaryTel}">${I.phone()}${label ||
       ` Appeler ${CFG.phonePrimary}`}</a>`;
 
+  /* Un véhicule saisi au back-office peut n'avoir aucune photo : sans garde-fou,
+     la page produisait « <img src="undefined"> » et une icône cassée. Le visuel
+     de remplacement reprend la teinte de la carte au lieu d'afficher du vide. */
+  const PHOTO_VIDE =
+    "data:image/svg+xml;charset=utf-8," +
+    encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
+        <defs><linearGradient id="f" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#1c1917"/><stop offset="1" stop-color="#0c0a09"/>
+        </linearGradient></defs>
+        <rect width="800" height="500" fill="url(#f)"/>
+        <g fill="none" stroke="#78716c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity=".55">
+          <path d="M212 322h376M244 322l22-58c6-16 21-26 38-26h192c17 0 32 10 38 26l22 58"/>
+          <path d="M262 264h276M318 238v-24h164v24"/>
+          <circle cx="300" cy="338" r="26"/><circle cx="500" cy="338" r="26"/>
+        </g>
+        <text x="400" y="420" text-anchor="middle" fill="#a8a29e" font-family="system-ui,sans-serif" font-size="22" opacity=".7">Photo à venir</text>
+      </svg>`,
+    );
+
+  const photo = (v, index) => (v.gallery && v.gallery[index]) || PHOTO_VIDE;
+
   const ctaBand = (o) => `
     <div class="cta-band" data-reveal>
       <h2>${o.title}</h2>
@@ -48,7 +70,7 @@
       <div class="vehicle__glow" style="background:${v.accent}"></div>
       <span class="badge badge--top vehicle__badge-tech">${v.transmission}</span>
       <div class="vehicle__media">
-        <img src="${v.gallery[0]}" alt="${v.name} — location de voiture au Maroc" loading="lazy" />
+        <img src="${photo(v, 0)}" alt="${v.name} — location de voiture au Maroc" loading="lazy" />
       </div>
       <div class="vehicle__body">
         <h3 class="vehicle__name">${v.name}</h3>
@@ -486,7 +508,7 @@ const locations = (selected) =>
   const vehicleDetail = (slug) => {
     const v = D.VEHICLES.find((x) => x.slug === slug);
     if (!v) return null;
-    const thumbs = v.gallery
+    const thumbs = (v.gallery || [])
       .map(
         (g, i) =>
           `<button type="button" class="${i === 0 ? "is-active" : ""}" data-thumb="${g}" aria-label="Image ${i + 1}"><img src="${g}" alt="${v.name} vue ${i + 1}" loading="lazy" /></button>`
@@ -503,7 +525,7 @@ const locations = (selected) =>
               <div class="vgallery__glow" style="background:${v.accent}"></div>
               <span class="vgallery__chip">dès <b>${money(v.priceFrom)} MAD</b> / jour</span>
               <span class="vgallery__deposit">Caution : <b>${money(v.deposit)} MAD</b></span>
-              <img class="vgallery__main" src="${v.gallery[0]}" alt="${v.name} — location au Maroc" />
+              <img class="vgallery__main" src="${photo(v, 0)}" alt="${v.name} — location au Maroc" />
             </div>
             <div class="vthumbs" data-thumbs>${thumbs}</div>
 
@@ -720,7 +742,7 @@ primary: `<a class="btn btn--primary" href="#/vehicules">${I.arrowRight()} Rése
                 (v) => `
             <article class="price-card" data-reveal>
               <div class="price-card__media">
-                <img src="${v.gallery[0]}" alt="${v.name}" loading="lazy" />
+                <img src="${photo(v, 0)}" alt="${v.name}" loading="lazy" />
               </div>
               <div class="price-card__body">
                 <span class="price-card__value">À partir de<b>${money(v.priceFrom)} MAD <i>/ jour</i></b></span>
@@ -1042,7 +1064,7 @@ primary: callBtn(" Poser ma question"),
             ${
               v
                 ? `<div class="price-card__media" style="border-radius:var(--radius-sm)">
-              <img src="${v.gallery[0]}" alt="${v.name}" style="height:110px" />
+              <img src="${photo(v, 0)}" alt="${v.name}" style="height:110px" />
             </div>
             <div>
               <b style="color:var(--white)">${v.name}</b>
