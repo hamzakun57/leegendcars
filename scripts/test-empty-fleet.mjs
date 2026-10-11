@@ -10,11 +10,18 @@ check("API renvoie une liste", Array.isArray(api.vehicles), `${api.vehicles.leng
 const avant = api.vehicles.length;
 
 const src = await (await fetch(`${B}/assets/js/app.js`)).text();
-check("liste vide => parc vide (pas de repli)", /if \(!data\.vehicles\.length\) \{\s*D\.VEHICLES = \[\];/.test(src));
-check("erreur reseau => repli conserve", /catch \(e\)[\s\S]*?liste de secours/.test(src));
+/* On ne vérifie plus des chaînes de code, mais les deux garanties qui comptent :
+   la flotte affichée vient de la base, et une panne ne se déguise pas en garage
+   vide. */
+check("flotte vide => affichage vide", /if \(!data\.length\) \{\s*D\.VEHICLES = \[\]/.test(src));
+check("panne => erreur signalée, pas un garage vide", /D\.FLETTE_ERREUR = /.test(src) && /catch \(e\)/.test(src));
+
+const dataJs = await (await fetch(`${B}/assets/js/data.js`)).text();
+check("aucune flotte de démonstration", /const VEHICLES = \[\];/.test(dataJs));
 
 const pages = await (await fetch(`${B}/assets/js/pages.js`)).text();
-check("encart « parc vide » defini", /const emptyFleet = /.test(pages));
+check("l'encart distingue panne et garage vide", /empty-fleet--erreur/.test(pages));
+check("encart « parc vide » défini", /const emptyFleet = /.test(pages));
 check("accueil et index l'utilisent", (pages.match(/emptyFleet\(\)/g) || []).length >= 3);
 check("recapitulatif tolere un vehicule absent", /D\.VEHICLES\[0\] \|\| null/.test(pages));
 

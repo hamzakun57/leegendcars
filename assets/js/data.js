@@ -471,6 +471,10 @@ window.DATA = {
     EXCLUDED,
     VEHICLE_FAQ,
     VEHICLES,
+      /* Renseignés par app.js quand la base n'a pas pu être lue : distingue
+         « garage vide » de « site en panne ». Vides = tout va bien. */
+      FLETTE_ERREUR: "",
+      FLETTE_DETAIL: "",
     TRUST,
     PROCESS,
     DESTINATIONS,

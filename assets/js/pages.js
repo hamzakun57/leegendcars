@@ -498,7 +498,23 @@ const locations = (selected) =>
   /* Le parc peut être vide : l'agence n'a pas encore saisi ses voitures.
      Préférer un message honnête à une page vide ou à des véhicules de
      démonstration qui n'existent pas. */
-  const emptyFleet = () => `<div class="empty-fleet">
+  /* Deux situations très différentes se cachent derrière la même page vide :
+     une agence qui n'a encore saisi aucune voiture, et un site qui n'a pas
+     réussi à joindre la base. La seconde affichait jusqu'ici « notre flotte est
+     en cours de mise à jour » — un mensonge qui fait perdre des clients et
+     masque la panne. On distingue donc les deux, et on dit ce qui bloque. */
+  const echecFlotte = () =>
+    typeof D.FLETTE_ERREUR === "string" && D.FLETTE_ERREUR
+      ? `<div class="empty-fleet empty-fleet--erreur"${D.FLETTE_DETAIL ? ` title="${D.FLETTE_DETAIL}"` : ""}>
+      <b>Impossible de charger nos véhicules</b>
+      ${D.FLETTE_ERREUR}<br />
+      Rechargez la page, ou écrivez-nous en attendant.
+    </div>`
+      : "";
+
+  const emptyFleet = () =>
+    echecFlotte() ||
+    `<div class="empty-fleet">
       <b>Aucun véhicule disponible pour le moment</b>
       Notre flotte est en cours de mise à jour. Écrivez-nous, nous vous dirons
       ce que nous avons en garage.

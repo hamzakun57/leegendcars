@@ -564,13 +564,17 @@
      data.js. */
   async function loadFleet() {
     try {
-      const data = await window.LCData.vehicles();
-      /* Réponse inattendue : on ne touche à rien et la liste de secours reste. */
-      if (!Array.isArray(data.vehicles)) return;
+      /* Un seul appel : la bibliothèque Supabase réessaie déjà toute seule en
+         cas de coupure. Un second essai de notre côté ne faisait que doubler
+         le temps d'attente avant d'afficher l'erreur. */
+      const data = (await window.LCData.vehicles()).vehicles;
+      if (!Array.isArray(data)) throw new Error("Réponse inattendue de la base.");
       /* Une liste vide, elle, veut dire « le parc est vide » : c'est l'état réel
          de l'agence quand elle n'a encore saisi aucune voiture. Afficher les
          véhicules de démonstration de data.js serait mensonger. */
-      if (!data.vehicles.length) {
+      D.FLETTE_ERREUR = "";
+      D.FLETTE_DETAIL = "";
+      if (!data.length) {
         D.VEHICLES = [];
         return;
       }
@@ -579,7 +583,7 @@
          texte. On ne remplace donc une valeur que si elle est renseignée, et on
          garde la valeur de secours du même modèle pour le reste. */
       const secours = new Map((D.VEHICLES || []).map((v) => [v.slug, v]));
-      D.VEHICLES = data.vehicles.map((v) => {
+      D.VEHICLES = data.map((v) => {
         const s = secours.get(v.slug);
         if (!s) return v;
         const liste = (a, b) => (Array.isArray(a) && a.length ? a : b);
@@ -599,7 +603,19 @@
         };
       });
     } catch (e) {
-      console.warn("Flotte en ligne indisponible, liste de secours utilisée.", e);
+      /* Distinguer « pas de véhicules » de « véhicules illisibles » : sans cela
+         une coupure se présentait comme un garage vide, et l'agence perdait des
+         demandes sans savoir qu'il y avait une panne. Le visiteur reçoit une
+         phrase ; le détail technique reste dans la console et dans l'infobulle,
+         pour que l'agence puisse nous le transmettre. */
+      const brut = String((e && e.message) || "").replace(/^Error:\s*/, "");
+      D.FLETTE_DETAIL = brut;
+      D.FLETTE_ERREUR = /failed to fetch|network|load failed/i.test(brut)
+        ? "Connexion à la base impossible."
+        : /jwt|token|session|401|403/i.test(brut)
+          ? "Session expirée."
+          : brut || "La base n'a pas répondu.";
+      console.warn("Flotte en ligne indisponible :", brut, e);
     }
   }
 

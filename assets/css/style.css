@@ -1005,6 +1005,14 @@ section[id] {
   font-weight: 700;
 }
 .empty-fleet a { color: var(--red); text-decoration: underline; }
+/* Panne de lecture : l'encart se distingue du simple garage vide, pour qu'on
+   ne laisse pas croire à un visiteur que l'agence n'a plus de voitures. */
+.empty-fleet--erreur {
+  border-color: var(--red);
+  border-style: solid;
+  background: color-mix(in srgb, var(--red) 6%, var(--bg-section));
+}
+.empty-fleet--erreur b { color: var(--red); }
 
 /* ---------- Trust ---------- */
 .trust__grid {
