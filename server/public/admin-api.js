@@ -57,6 +57,66 @@
   };
 
   /* ------------------------------------------------------------------ */
+  /* Fonctions (upload, documents)                                       */
+  /* ------------------------------------------------------------------ */
+  /* functions.invoke n'a AUCUN délai par défaut : si la connexion reste
+     ouverte, la requête ne se termine jamais et l'écran reste bloqué sur
+     « Envoi… » sans le moindre message. On plafonne donc chaque appel.
+
+     La bibliothèque remplace aussi le message de la fonction par un texte
+     générique (« Edge Function returned a non-2xx status code ») : la vraie
+     raison — photos trop lourdes, session expirée — est dans la réponse, qu'il
+     faut aller lire. */
+  const DELAI_FONCTION = 90000;
+
+  /* La fonction refuse un lot dépassant 4 Mo (MAX_ENVOI côté serveur). Deux
+     photos de téléphone le franchissent sans effort : la fonction rejetait alors
+     l'ensemble, et l'agent ne gardait aucune photo. Le client connaît les
+     tailles : il découpe plutôt que de tout renvoyer d'un bloc. */
+  const POIDS_ENVOI = 3.4 * 1024 * 1024;
+  const TAILLE_PHOTO_MAX = 5 * 1024 * 1024;
+
+  function decouperParPoids(lignes, plafond) {
+    const lots = [];
+    let lot = [];
+    let poids = 0;
+    for (const ligne of lignes) {
+      const taille = typeof ligne === "string" ? ligne.length : 0;
+      /* Une photo seule trop lourde est dropped ici : la rejeter ici évite une
+         requête vouée à l'échec, et le message est rendu tout de suite. */
+      if (taille > TAILLE_PHOTO_MAX) continue;
+      if (lot.length && poids + taille > plafond) {
+        lots.push(lot);
+        lot = [];
+        poids = 0;
+      }
+      lot.push(ligne);
+      poids += taille;
+    }
+    if (lot.length) lots.push(lot);
+    return lots;
+  }
+
+  async function appelerFonction(nom, corps, delai = DELAI_FONCTION) {
+    const { data, error } = await getClient().functions.invoke(nom, { body: corps, timeout: delai });
+    if (!error) return data;
+
+    const message = (error.message || "").trim();
+    const reponse = error.context;
+    const detail =
+      (reponse && typeof reponse === "object" && typeof reponse.error === "string" && reponse.error) ||
+      (typeof reponse === "string" && reponse.slice(0, 200)) ||
+      "";
+
+    if (/abort|timed ?out|timeout/i.test(message)) {
+      throw new Error("Le service d'envoi ne répond plus. Réessayez avec des photos plus légères.");
+    }
+    if (detail) throw new Error(detail);
+    if (message && !/non-2xx/i.test(message)) throw new Error(message);
+    throw new Error(`Le service d'envoi a refusé la demande${error.status ? " (code " + error.status + ")" : ""}.`);
+  }
+
+  /* ------------------------------------------------------------------ */
   /* Recalculs — mêmes règles que server/db.js                        */
   /* ------------------------------------------------------------------ */
   const json = (brut, defaut) => {
@@ -650,19 +710,16 @@
     }
 
     if (seg[2] === "reservations" && (seg[4] === "contract" || seg[4] === "invoice")) {
-      const { data, error } = await c.functions.invoke("document", {
-        body: { id: Number(seg[3]), document: seg[4] === "invoice" ? "invoice" : "contract" },
+      const data = await appelerFonction("document", {
+        id: Number(seg[3]), document: seg[4] === "invoice" ? "invoice" : "contract",
       });
-      if (error) throw new Error("Le document n'a pas pu être généré : " + error.message);
       return { __html: data, __type: "html" };
     }
 
     if (seg[2] === "reservations" && seg[4] === "attachments" && methode === "POST") {
-      const { data, error } = await c.functions.invoke("upload", {
-        body: { reservation_id: Number(seg[3]), kind: corps.kind, name: corps.name, files: corps.files },
+      return appelerFonction("upload", {
+        reservation_id: Number(seg[3]), kind: corps.kind, name: corps.name, files: corps.files,
       });
-      if (error) throw new Error(error.message || "Envoi refusé");
-      return data;
     }
 
     throw new Error("Route inconnue : " + chemin);
@@ -854,10 +911,7 @@
      valide la signature binaire du fichier avant de l'accepter. */
   async function supprimerFichier(storedName) {
     try {
-      const { error } = await getClient().functions.invoke("upload", {
-        body: { action: "delete", stored_name: storedName },
-      });
-      if (error) throw error;
+      await appelerFonction("upload", { action: "delete", stored_name: storedName }, 20000);
     } catch (e) {
       /* La ligne est déjà supprimée : un fichier orphelin est moins grave
          qu'un dossier bloqué pour l'agent. */
@@ -912,7 +966,7 @@
   /* Supprime une photo du stockage : elle n'appartient plus à la galerie. */
   async function effacerPhoto(chemin) {
     try {
-      await getClient().functions.invoke("upload", { body: { action: "delete", stored_name: chemin } });
+      await appelerFonction("upload", { action: "delete", stored_name: chemin }, 20000).catch(() => {});
     } catch (e) {
       console.warn("Photo non supprimée :", e.message);
     }
@@ -938,10 +992,17 @@
       avertissements.push("certains chemins de photo ont été ignorés (format non autorisé)");
     }
     if (nouvelles.length) {
-      const { data, error } = await getClient().functions.invoke("upload", { body: { photos: nouvelles.slice(0, 12) } });
-      if (error) throw new Error(error.message || "Envoi des photos refusé");
-      cible.push(...((data && data.paths) || []));
-      for (const avert of ((data && data.warnings) || [])) avertissements.push(avert);
+      /* Les lots partent par trois : assez pour ne pas faire attendre l'agent,
+         pas assez pour saturer le service. L'ordre des photos est conservé,
+         c'est lui qui décide de la première image affichée. */
+      const lots = decouperParPoids(nouvelles.slice(0, 12), POIDS_ENVOI);
+      for (let i = 0; i < lots.length; i += 3) {
+        const reponses = await Promise.all(lots.slice(i, i + 3).map((lot) => appelerFonction("upload", { photos: lot })));
+        for (const data of reponses) {
+          cible.push(...((data && data.paths) || []));
+          for (const avert of ((data && data.warnings) || [])) avertissements.push(avert);
+        }
+      }
     }
     return { gallery: cible.slice(0, 12), errors: avertissements };
   }

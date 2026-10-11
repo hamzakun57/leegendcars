@@ -49,7 +49,15 @@ function ascii(b: Uint8Array, debut: number, fin: number): string {
 export function decoder(dataUrl: string): Uint8Array {
   const virgule = dataUrl.indexOf(",");
   const base64 = virgule >= 0 ? dataUrl.slice(virgule + 1) : dataUrl;
-  const binaire = atob(base64.replace(/\s/g, ""));
+  /* atob lève un message anglais (« Failed to decode base64 ») qui remonte
+     jusqu'à l'écran de l'agent. Le fichier est renvoyé tel quel, sans
+     explication utile : on le dit en français et on nomme le coupable. */
+  let binaire: string;
+  try {
+    binaire = atob(base64.replace(/\s/g, ""));
+  } catch {
+    throw new Error("image illisible : le fichier n'a pas pu être décodé");
+  }
   const sortie = new Uint8Array(binaire.length);
   for (let i = 0; i < binaire.length; i++) sortie[i] = binaire.charCodeAt(i);
   return sortie;
