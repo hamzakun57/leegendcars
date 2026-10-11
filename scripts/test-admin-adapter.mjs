@@ -180,6 +180,43 @@ try {
       JSON.stringify(comparer(ancienApres.reservation, nouveauApres.reservation).manquants.slice(0, 5)));
     check("PATCH dossier — km identique", ancienApres.reservation.kmDone === nouveauApres.reservation.kmDone, `${ancienApres.reservation.kmDone} vs ${nouveauApres.reservation.kmDone}`);
 
+    /* Lien de signature : la route se distinguait mal de « enregistrer une
+       signature » et plantait sur un corps vide. On vérifie le lien ET qu'il
+       s'ouvre vraiment, sans aucun en-tête — c'est ainsi que le client y
+       accède, et la fonction refusait jusqu'ici ce cas. */
+    const lien = await w.eval(`window.LCAdmin.api("/api/admin/reservations/${id}/signature/link", { method: "POST" })`);
+    check("lien de signature créé", !!(lien && lien.token && lien.url), JSON.stringify(lien).slice(0, 90));
+    if (lien && lien.url) {
+      const page = await fetch(lien.url);
+      const textePage = await page.text();
+      check("page de signature accessible au client", page.status === 200 && textePage.includes("Signature du contrat"),
+        `HTTP ${page.status}, ${textePage.length} caractères`);
+      const forged = await fetch(lien.url.replace(lien.token, "a".repeat(24)));
+      check("jeton inventé refusé", forged.status === 404, `HTTP ${forged.status}`);
+    }
+
+    /* Contrat et facture : l'écran demande le document, l'adaptateur l'ouvre
+       dans un onglet. La fabrication du document, elle, est déjà couverte par
+       la suite des Edge Functions ; ici on vérifie que la ROUTE répond — c'est
+       elle qui manquait, l'écran ouvrant une adresse /api/… inexistante. */
+    let ouverture = "";
+    w.open = () => ({ document: { open() {}, write: (h) => { ouverture = h; }, close() {} } });
+    for (const kind of ["contract", "invoice"]) {
+      let ok = false;
+      let motif = "";
+      try {
+        const r = await w.eval(`window.LCAdmin.api("/api/admin/reservations/${id}/${kind}")`);
+        ok = !!(r && r.ok) || ouverture.length > 1000;
+      } catch (e) {
+        /* Un dossier incomplet refuse le document : c'est un refus métier,
+           pas une route absente. Ce qui compte ici est que la route réponde. */
+        ok = !/Route inconnue/.test(e.message);
+        motif = e.message;
+      }
+      check(`route ${kind} reconnue`, ok, motif || (ouverture ? `${ouverture.length} caractères` : ""));
+      ouverture = "";
+    }
+
     /* Création d'un véhicule par l'écran d'édition, avec un corps objet : c'est
        exactement ce que fait admin.js. Le test passa par l'API du serveur, il
        ne verrait donc jamais une régression de l'adaptateur sur cette route —

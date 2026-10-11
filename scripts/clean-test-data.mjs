@@ -18,7 +18,7 @@ const etapes = [
   ["clients de test", "delete from clients where last_name like 'Test%' or last_name in ('Nouveau client','Faux','Types')"],
   ["véhicules de test", `delete from vehicles where ${VEHICULES_TEST}`],
   ["comptes de test", "delete from users where username like 'test\\_%' or username like 'mnt\\_%' or username like 'verif\\_%' or username like 'adapter\\_%' or username like 'types\\_%' or username like 'netlify\\_%'"],
-  ["compteurs de test", "delete from counters where name like 'contract'"],
+  ["compteurs de test", "delete from counters where name like 'contract' or name like 'invoice:%'"],
 ];
 
 for (const [nom, sql] of etapes) {

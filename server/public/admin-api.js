@@ -700,10 +700,12 @@
       return ajouterPaiement(Number(seg[3]), corps);
     }
 
-    if (seg[2] === "reservations" && seg[4] === "signature" && methode === "POST") {
+    /* « !seg[5] » est indispensable : /signature/link est une autre route, et
+       elle passait ici avec un corps vide — d'où « null (reading 'name') ». */
+    if (seg[2] === "reservations" && seg[4] === "signature" && !seg[5] && methode === "POST") {
       return enregistrerSignature(Number(seg[3]), corps, "onsite");
     }
-    if (seg[2] === "reservations" && seg[4] === "signature" && methode === "DELETE") {
+    if (seg[2] === "reservations" && seg[4] === "signature" && !seg[5] && methode === "DELETE") {
       const d = await chargerDossier(Number(seg[3]));
       if (!d) throw new Error("Réservation introuvable");
       await c.from("reservations").update({

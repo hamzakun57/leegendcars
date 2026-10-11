@@ -49,6 +49,24 @@
         })
     : viaServeur;
 
+  /* Le contrat et la facture s'ouvrent dans un onglet. Deux réalités :
+
+   - avec le serveur (local), l'adresse /api/… rend directement le document ;
+   - sur Netlify il n'y a plus de serveur et cette adresse n'existe pas : le
+     navigateur y affichait « Page not found ». L'adaptateur sait alors générer
+     le document et l'ouvre lui-même.
+
+   Un lien <a href> ne peut pas couvrir les deux : il faut passer par l'appel. */
+  function ouvrirDocument(url) {
+    if (window.LCAdmin && window.LCAdmin.mode === "supabase") {
+      return api(url).catch((e) => {
+        flash(e.message, "err");
+      });
+    }
+    window.open(url, "_blank", "noopener");
+    return Promise.resolve();
+  }
+
   const flash = (text, kind = "ok") => {
     $("#msg").innerHTML = `<div class="${kind}">${esc(text)}</div>`;
     setTimeout(() => ($("#msg").innerHTML = ""), 4000);
@@ -1028,7 +1046,7 @@
           }</div>
         </div>
         <div class="row">
-          <a class="btn" href="${url}" target="_blank">Ouvrir dans un onglet</a>
+          <button type="button" class="btn" id="doc-open">Ouvrir dans un onglet</button>
           ${
             isContract
               ? `<button id="sig-open" ${r.dossierOpen ? "" : "disabled"}>${
@@ -1441,9 +1459,17 @@
 
     $("#sig-open")?.addEventListener("click", () => openSignatureModal(r));
 
-    $("#doc-print")?.addEventListener("click", () => {
+    /* Les deux boutons d'ouverture — le lien du panneau et celui de la barre —
+       passent par l'appel unique : une adresse /api/… n'existe pas sur Netlify. */
+    const urlDocument = () => {
       const kind = DOS_SUB === "facture" ? "invoice" : "contract";
-      window.open(`/api/admin/reservations/${r.id}/${kind}`, "_blank", "noopener");
+      return `/api/admin/reservations/${r.id}/${kind}`;
+    };
+    $("#doc-open")?.addEventListener("click", () => {
+      ouvrirDocument(urlDocument()).catch((e) => flash(e.message, "err"));
+    });
+    $("#doc-print")?.addEventListener("click", () => {
+      ouvrirDocument(urlDocument()).catch((e) => flash(e.message, "err"));
     });
   }
 
