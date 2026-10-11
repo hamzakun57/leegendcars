@@ -1750,12 +1750,19 @@
     }
   }
 
+  const imgSrc = (p) => {
+    if (!p) return "";
+    const s = String(p).trim();
+    if (/^(https?:|\/\/|data:)/i.test(s)) return esc(s);
+    return "/" + esc(s.replace(/^\/+/, ""));
+  };
+
   function vehicleCard(v) {
     const spec = (l, val) => `<div><div class="faint">${l}</div><div>${val || "—"}</div></div>`;
     return `<div class="panel">
       <div class="row" style="justify-content:space-between;align-items:flex-start">
         <div style="display:flex;gap:14px">
-          <div class="veh-thumb">${v.gallery && v.gallery[0] ? `<img src="/${esc(v.gallery[0])}" alt="">` : "—"}</div>
+          <div class="veh-thumb">${v.gallery && v.gallery[0] ? `<img src="${imgSrc(v.gallery[0])}" alt="">` : "—"}</div>
           <div>
             <b style="font-size:16px">${esc(v.name)}</b>
             <span class="faint"> · <code>${esc(v.slug)}</code></span>
@@ -1808,7 +1815,7 @@
     const removed = [];
 
     const shotHtml = (src, index, isPreview) => `<div class="shot">
-          <img src="${isPreview ? src : "/" + esc(src)}" alt="">
+          <img src="${isPreview ? src : imgSrc(src)}" alt="">
           <button type="button" class="shot__x" data-rm="${index}" data-preview="${isPreview ? 1 : 0}" title="Retirer">×</button>
         </div>`;
 
