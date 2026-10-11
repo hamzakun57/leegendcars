@@ -452,10 +452,12 @@ api.get("/admin/reservations/:id/contract", requireAdmin, h(async (req, res) => 
   }
   const fresh = await getDossier(id);
   const vehicle = fresh.vehicle_slug ? await getVehicle(fresh.vehicle_slug) : null;
-  /* On renvoie { __html, __type:"html" } au lieu du HTML brut pour que
-     admin.js (ouvrirDocument) puisse ouvrir via Blob URL dans les deux modes
-     (Express et Supabase), sans about:blank. */
-  res.json({ __html: contractHtml(fresh, vehicle), __type: "html" });
+  const content = contractHtml(fresh, vehicle);
+  if (req.headers.accept && req.headers.accept.includes("text/html") && !req.headers["sec-fetch-dest"]?.includes("empty")) {
+    res.type("html").send(content);
+  } else {
+    res.json({ ok: true, __html: content, __type: "html" });
+  }
 }));
 
 api.get("/admin/reservations/:id/invoice", requireAdmin, h(async (req, res) => {
@@ -470,7 +472,12 @@ api.get("/admin/reservations/:id/invoice", requireAdmin, h(async (req, res) => {
   }
   const fresh = await getDossier(id);
   const vehicle = fresh.vehicle_slug ? await getVehicle(fresh.vehicle_slug) : null;
-  res.json({ __html: invoiceHtml(fresh, vehicle), __type: "html" });
+  const content = invoiceHtml(fresh, vehicle);
+  if (req.headers.accept && req.headers.accept.includes("text/html") && !req.headers["sec-fetch-dest"]?.includes("empty")) {
+    res.type("html").send(content);
+  } else {
+    res.json({ ok: true, __html: content, __type: "html" });
+  }
 }));
 
 /* ---------- signature client ---------- */

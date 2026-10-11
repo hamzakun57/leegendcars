@@ -741,7 +741,7 @@
       const data = await appelerFonction("document", {
         id: Number(seg[3]), document: seg[4] === "invoice" ? "invoice" : "contract",
       });
-      return { __html: data, __type: "html" };
+      return { ok: true, __html: data, __type: "html" };
     }
 
     if (seg[2] === "reservations" && seg[4] === "attachments" && methode === "POST") {
@@ -1103,16 +1103,6 @@
         }
       }
       const resultat = await router(methode, chemin, corps, opts);
-      /* Les documents sont renvoyés à part : ils s'affichent dans un onglet,
-         pas dans le flux JSON de l'écran. */
-      if (resultat && resultat.__html) {
-        const fenetre = window.open("", "_blank", "noopener");
-        if (fenetre) {
-          fenetre.document.write(resultat.__html);
-          fenetre.document.close();
-        }
-        return { ok: true };
-      }
       return resultat;
     },
     estAdmin,

@@ -72,10 +72,10 @@
      LCAdminConfig is loaded by admin-config.js ; on the public site (this page)
      we load the same file to get the Supabase URL and anon key. */
   function getConfig() {
-    var cfg = window.LCAdminConfig || {};
+    var cfg = window.LCAdminConfig || (window.DATA && window.DATA.CFG) || {};
     return {
-      url: cfg.supabaseUrl || "",
-      key: cfg.supabaseAnonKey || "",
+      url: cfg.supabaseUrl || "https://dqygspzmndcsbkxeiulm.supabase.co",
+      key: cfg.supabaseAnonKey || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRxeWdzcHptbmRjc2JreGVpdWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE2NTkyODEsImV4cCI6MjEwNzIzNTI4MX0.2Xw305r5GJtBn85tnVPFs8MCLgJuiPLK9gnSSmu2pZI",
     };
   }
 
@@ -88,21 +88,30 @@
   }
 
   var cfg = getConfig();
-  if (!cfg.url) {
-    root.innerHTML = '<div class="err-page"><b>Configuration manquante.</b><br>Rechargez la page ou contactez l\'agence.</div>';
-    return;
-  }
-
   var EDGE = cfg.url + "/functions/v1/signature/" + encodeURIComponent(token);
 
   /* ------------------------------------------------------------------ fetch dossier */
   fetch(EDGE, {
     headers: { "Authorization": "Bearer " + cfg.key, "apikey": cfg.key }
   })
-  .then(function (r) { return r.json(); })
-  .then(function (data) {
-    if (!data || !data.ok) throw new Error(data && data.error ? data.error : "Lien introuvable ou expiré.");
-    renderPage(data);
+  .then(function (r) {
+    return r.text().then(function (text) {
+      var data = null;
+      try {
+        data = JSON.parse(text);
+      } catch (err) {
+        if (text.includes("<!doctype") || text.includes("<html")) {
+          document.open();
+          document.write(text);
+          document.close();
+          return;
+        }
+      }
+      if (!data || !data.ok) {
+        throw new Error((data && data.error) || (r.status === 404 ? "Lien de signature introuvable ou expiré." : (r.status === 410 ? "Ce contrat n'est plus ouvert à la signature." : "Erreur de chargement.")));
+      }
+      renderPage(data);
+    });
   })
   .catch(function (err) {
     root.innerHTML = '<div class="err-page"><b>' + e(err.message || "Erreur.") + '</b><br>Veuillez contacter l\'agence.</div>';
@@ -169,10 +178,19 @@
     fetch(EDGE + "/contrat", {
       headers: { "Authorization": "Bearer " + cfg.key, "apikey": cfg.key }
     })
-    .then(function (r) { return r.json(); })
-    .then(function (data) {
-      if (!data || !data.html) return;
-      var blob = new Blob([data.html], { type: "text/html; charset=utf-8" });
+    .then(function (r) { return r.text(); })
+    .then(function (text) {
+      var htmlContent = "";
+      try {
+        var data = JSON.parse(text);
+        htmlContent = data.html || "";
+      } catch (e) {
+        if (text.includes("<!doctype") || text.includes("<html")) {
+          htmlContent = text;
+        }
+      }
+      if (!htmlContent) return;
+      var blob = new Blob([htmlContent], { type: "text/html; charset=utf-8" });
       var burl = URL.createObjectURL(blob);
       var iframe = document.getElementById("doc-frame");
       if (!iframe) return;

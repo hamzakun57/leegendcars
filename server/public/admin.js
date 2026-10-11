@@ -51,25 +51,41 @@
 
   /* Le contrat et la facture s'ouvrent dans un onglet. Deux réalités :
 
-   - avec le serveur (local), la route renvoie désormais { __html, __type:"html" }
-     (JSON) pour que l'adaptateur et le navigateur se comportent de la même façon ;
+   - avec le serveur (local), l'appel renvoie le HTML ou { __html } ;
    - sur Netlify, l'adaptateur (admin-api.js) appelle l'Edge Function et renvoie
-     également { __html, __type:"html" }.
+     { __html: data, __type: "html" }.
 
-   Dans les deux cas on crée un Blob URL pour ouvrir le HTML dans un onglet,
-   sans jamais naviguer vers une adresse qui n'existe pas côté Netlify. */
+   Pour éviter d'être bloqué par le bloqueur de pop-ups après un appel réseau,
+   on ouvre la fenêtre immédiatement sur le clic utilisateur, puis on y injecte
+   le Blob URL dès que la réponse arrive. */
   async function ouvrirDocument(url) {
+    const win = window.open("", "_blank");
+    if (win) {
+      try {
+        win.document.title = "Génération du document…";
+        win.document.body.style.cssText = "margin:0;font:15px system-ui,sans-serif;background:#202228;color:#e0e2ec;display:grid;place-items:center;height:100vh";
+        win.document.body.innerHTML = "<div>Génération du document en cours…</div>";
+      } catch (e) {}
+    }
+
     try {
       const res = await api(url);
-      const htmlStr = (res && res.__type === "html" && res.__html) ? res.__html
+      const htmlStr = (res && res.__html) ? res.__html
                     : (typeof res === "string" ? res : null);
-      if (!htmlStr) { flash("Impossible d'ouvrir le document.", "err"); return; }
-      const blob   = new Blob([htmlStr], { type: "text/html; charset=utf-8" });
+      if (!htmlStr) {
+        if (win) win.close();
+        flash("Impossible d'ouvrir le document.", "err");
+        return;
+      }
+      const blob = new Blob([htmlStr], { type: "text/html; charset=utf-8" });
       const blobUrl = URL.createObjectURL(blob);
-      const win = window.open(blobUrl, "_blank", "noopener");
-      if (win) win.addEventListener("load", () => URL.revokeObjectURL(blobUrl), { once: true });
-      else URL.revokeObjectURL(blobUrl);
+      if (win) {
+        win.location.href = blobUrl;
+      } else {
+        window.open(blobUrl, "_blank");
+      }
     } catch (e) {
+      if (win) win.close();
       flash(e.message || "Erreur lors de l'ouverture du document.", "err");
     }
   }
