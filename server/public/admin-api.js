@@ -102,18 +102,40 @@
     if (!error) return data;
 
     const message = (error.message || "").trim();
-    const reponse = error.context;
-    const detail =
-      (reponse && typeof reponse === "object" && typeof reponse.error === "string" && reponse.error) ||
-      (typeof reponse === "string" && reponse.slice(0, 200)) ||
-      "";
 
-    if (/abort|timed ?out|timeout/i.test(message)) {
+    /* Erreur du relais : la fonction n'a même pas répondu (surcharge, coupure).
+       À distinguer d'un refus de la fonction, qui a, lui, une explication. */
+    if (/relay/i.test(message)) {
+      throw new Error("Le service d'envoi est momentanément indisponible. Réessayez dans un instant.");
+    }
+    if (/abort|timed ?out|timeout|failed to send/i.test(message)) {
       throw new Error("Le service d'envoi ne répond plus. Réessayez avec des photos plus légères.");
     }
+
+    /* « context » est l'objet Response, pas le corps : il faut le lire pour
+       obtenir le code HTTP et le message écrit par la fonction. */
+    const reponse = error.context;
+    let code = 0;
+    let detail = "";
+    if (reponse && typeof reponse.status === "number") {
+      code = reponse.status;
+      try {
+        const lu = await reponse.clone().json();
+        if (lu && typeof lu.error === "string") detail = lu.error;
+      } catch {
+        try {
+          const texte = (await reponse.clone().text()).trim();
+          if (texte && texte.length < 200 && !/^\s*</.test(texte)) detail = texte;
+        } catch {}
+      }
+    }
+
     if (detail) throw new Error(detail);
-    if (message && !/non-2xx/i.test(message)) throw new Error(message);
-    throw new Error(`Le service d'envoi a refusé la demande${error.status ? " (code " + error.status + ")" : ""}.`);
+    if (code === 401 || code === 403) throw new Error("Session expirée, reconnectez-vous.");
+    if (code === 413) throw new Error("Les photos sont trop lourdes pour cet envoi. Choisissez-en moins ou plus légère.");
+    if (code === 429) throw new Error("Trop d'envois en même temps. Patientez quelques secondes.");
+    if (code >= 500) throw new Error("Le service d'envoi est en panne. Réessayez dans un instant.");
+    throw new Error(`Le service d'envoi a refusé la demande (code ${code || "inconnu"}).`);
   }
 
   /* ------------------------------------------------------------------ */
@@ -776,7 +798,7 @@
       days = Math.max(1, Math.round(ms / 86400000));
       daily = v.price_from || 0;
       for (const t of liste(v.tiers)) if (days >= t.days) daily = t.price;
-      seatTotal = (Number(siège) || 0) * days;
+      seatTotal = (Number(siege) || 0) * days;
       total = daily * days + seatTotal;
     }
     return { days, daily, seatTotal, total };

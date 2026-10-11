@@ -62,6 +62,11 @@
      l'écran comme pour l'impression. */
   const TAILLE_MAX = 1600;
   const QUALITE = 0.82;
+  /* Une capture d'écran en PNG reste lourde même réduite à 1600 px. La
+     fonction refuse un lot de plus de 4 Mo : on repasse donc la photo dans un
+     canvas plus petit / moins compressé tant qu'elle dépasse ce poids, sinon
+     deux photos suffisent à faire refuser l'envoi entier. */
+  const POIDS_PHOTO = 850 * 1024;
 
   /** data URL -> data URL réduite. Renvoie l'original si le navigateur refuse
       (pas de canvas, format exotique) : la limite serveur reste le filet. */
@@ -75,15 +80,27 @@
         i.src = dataUrl;
       });
       const facteur = Math.min(1, TAILLE_MAX / Math.max(img.width, img.height));
-      if (facteur === 1 && dataUrl.length < 700 * 1024) return dataUrl; // déjà raisonnable
-      const canvas = document.createElement("canvas");
-      canvas.width = Math.round(img.width * facteur);
-      canvas.height = Math.round(img.height * facteur);
-      const ctx = canvas.getContext("2d");
-      ctx.fillStyle = "#fff";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-      return canvas.toDataURL("image/jpeg", QUALITE);
+      if (facteur === 1 && dataUrl.length < POIDS_PHOTO) return dataUrl; // déjà raisonnable
+
+      let largeur = Math.round(img.width * facteur);
+      let hauteur = Math.round(img.height * facteur);
+      let qualite = QUALITE;
+      let sortie = "";
+      for (let essai = 0; essai < 4; essai++) {
+        const canvas = document.createElement("canvas");
+        canvas.width = largeur;
+        canvas.height = hauteur;
+        const ctx = canvas.getContext("2d");
+        ctx.fillStyle = "#fff";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        sortie = canvas.toDataURL("image/jpeg", qualite);
+        if (sortie.length < POIDS_PHOTO) return sortie;
+        qualite = Math.max(0.45, qualite - 0.15);
+        largeur = Math.round(largeur * 0.8);
+        hauteur = Math.round(hauteur * 0.8);
+      }
+      return sortie;
     } catch (e) {
       return dataUrl;
     }
