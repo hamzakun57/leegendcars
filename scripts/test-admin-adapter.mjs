@@ -204,6 +204,18 @@ try {
       Array.isArray(ficheAdaptateur.vehicle.gallery) && ficheAdaptateur.vehicle.gallery.length === 0,
       JSON.stringify(ficheAdaptateur.vehicle.gallery));
 
+    /* Un doublon doit produire une phrase lisible, pas un message technique de
+       PostgreSQL — ni, surtout, une erreur qui masque la cause réelle. Ce test
+       doit donc précéder la suppression. */
+    let doublon = "";
+    try {
+      await w.eval(`window.LCAdmin.api("/api/admin/vehicles", { method: "POST", body: ${JSON.stringify(fiche)} })`);
+    } catch (e) {
+      doublon = e.message;
+    }
+    check("doublon — message lisible", /déjà ce nom/.test(doublon), doublon || "aucune erreur levée");
+    check("doublon — pas de détail technique", !/row-level security|duplicate key|PGRST/i.test(doublon), doublon);
+
     await w.eval(`window.LCAdmin.api("/api/admin/vehicles/${ficheAdaptateur.vehicle.slug}", { method: "DELETE" })`).catch(() => {});
     await fetch(`${B}/api/admin/vehicles/${ficheServeur.vehicle.slug}`, { method: "DELETE", headers: { cookie: cookieServeur } }).catch(() => {});
 
@@ -214,9 +226,12 @@ try {
 } catch (e) {
   check("erreur inattendue", false, e.message);
 } finally {
-  /* La voiture de travail n'est créée que si le parc est vide : sans ce
-     nettoyage, chaque passage laissait un véhicule « Adaptateur <date> » dans
-     la base de l'agence. */
+  /* Nettoyage par préfixe plutôt que par variable : un test interrompu au
+     milieu laisserait sinon une voiture « Saisie <date> » dans la base de
+     l'agence, et les suites suivantes échoueraient sur un parc non vide. */
+  const jeton = { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: "Bearer " + process.env.SUPABASE_SERVICE_ROLE_KEY, "Content-Type": "application/json" };
+  await fetch(`${process.env.SUPABASE_URL}/rest/v1/vehicles?slug=like.saisie-*`, { method: "DELETE", headers: jeton }).catch(() => {});
+  await fetch(`${process.env.SUPABASE_URL}/rest/v1/vehicles?slug=like.adaptateur-*`, { method: "DELETE", headers: jeton }).catch(() => {});
   if (voitureCreee) {
     await fetch(`${B}/api/admin/vehicles/${voitureCreee}`, { method: "DELETE", headers: { cookie: cookieServeur } }).catch(() => {});
   }

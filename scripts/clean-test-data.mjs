@@ -5,11 +5,18 @@ import pg from "pg";
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
+/* Un seul endroit décide de ce qui est « de test ». Toute création de fixture
+   s'y ajoute ; sinon un préfixe oublié survit à une exécution interrompue et
+   fait échouer les suites suivantes sur un parc qui n'est plus vide. */
+const VEHICULES_TEST =
+  "slug like 'essai-%' or slug like 'saisie-%' or slug like 'adaptateur-%' or slug like 'types-%' or slug like 'dacia-%'" +
+  " or name like 'Essai %' or name like 'Saisie %' or name like 'Adaptateur %' or name like 'Types %' or name like 'Dacia %'";
+
 const etapes = [
-  ["suivis orphelins", "delete from maintenance where vehicle_slug in (select slug from vehicles where slug like 'essai-%' or name like 'Essai %' or name like 'Adaptateur %' or name like 'Types %')"],
+  ["suivis orphelins", `delete from maintenance where vehicle_slug in (select slug from vehicles where ${VEHICULES_TEST})`],
   ["dossiers de test", "delete from reservations where created_by like 'test\\_%' or last_name like 'Public %' or last_name like 'Agent %' or created_by like 'mnt\\_%' or last_name like 'Comparaison %' or ref like 'EDGE-%' or ref like 'SONDE-%' or first_name in ('Edge','Navigateur','Sonde')"],
   ["clients de test", "delete from clients where last_name like 'Test%' or last_name in ('Nouveau client','Faux','Types')"],
-  ["véhicules de test", "delete from vehicles where slug like 'essai-%' or name like 'Essai %' or name like 'Adaptateur %' or name like 'Types %'"],
+  ["véhicules de test", `delete from vehicles where ${VEHICULES_TEST}`],
   ["comptes de test", "delete from users where username like 'test\\_%' or username like 'mnt\\_%' or username like 'verif\\_%' or username like 'adapter\\_%' or username like 'types\\_%' or username like 'netlify\\_%'"],
   ["compteurs de test", "delete from counters where name like 'contract'"],
 ];

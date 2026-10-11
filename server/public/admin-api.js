@@ -37,9 +37,23 @@
   }
 
   /* Un échec réseau n'est pas un 401 : on ne doit pas rediriger vers la
-     connexion quand Supabase est simplement injoignable. */
+     connexion quand Supabase est simplement injoignable.
+
+     Les messages bruts de PostgreSQL sont techniques et illisibles pour une
+     personne qui enregistre une voiture. On traduit les cas courants — une
+     erreur masquée par une autre est exactement ce qui a prolongé le
+     diagnostic du « [object Object] ». */
   const surErreur = (e) => {
-    throw new Error((e && e.message) || "Erreur Supabase");
+    const texte = (e && e.message) || "";
+    const code = (e && e.code) || (e && e.cause && e.cause.code) || "";
+    if (code === "23505" || /duplicate key|already exists/i.test(texte)) {
+      throw new Error("Un véhicule porte déjà ce nom. Modifiez-le, ou éditez le véhicule existant.");
+    }
+    if (code === "42501" || /row-level security/i.test(texte)) {
+      throw new Error("La base a refusé l'écriture. Reconnectez-vous, puis réessayez.");
+    }
+    if (code === "PGRST116") throw new Error("Véhicule introuvable : il a peut-être été supprimé.");
+    throw new Error(texte || "Erreur Supabase");
   };
 
   /* ------------------------------------------------------------------ */
@@ -360,7 +374,7 @@
         const slug = normaliser(corps.slug || corps.name);
         if (!slug) throw new Error("Nom requis");
         const deja = await lireVehicule(slug);
-        if (deja) throw new Error("Ce slug existe déjà");
+        if (deja) throw new Error("Un véhicule porte déjà ce nom. Modifiez-le, ou éditez le véhicule existant.");
         const v = await ecrireVehicule(corps, slug, null);
         if (!v.ok) throw new Error(v.error);
         return { ok: true, vehicle: v.vehicle, warnings: v.warnings };
@@ -944,7 +958,7 @@
     if (!vehicle) {
       const ligne = { ...modifs, slug, gallery: JSON.stringify(galerie.gallery), created_at: maintenant, updated_at: maintenant };
       const { data, error } = await getClient().from("vehicles").insert(ligne).select().maybeSingle();
-      if (error) return { ok: false, error: message(error) };
+      if (error) return surErreur(error);
       return { ok: true, vehicle: enrichirVehicule(data), warnings: galerie.errors };
     }
 
@@ -953,7 +967,7 @@
     if (nouveauSlug && nouveauSlug !== slug) modifs.slug = nouveauSlug;
 
     const { data, error } = await getClient().from("vehicles").update(modifs).eq("slug", slug).select().maybeSingle();
-    if (error) return { ok: false, error: message(error) };
+    if (error) return surErreur(error);
 
     /* Un renommage doit.trainner les réservations, les indisponibilités et
        les suivis : sinon ils resteraient pointés sur un slug disparu. */
