@@ -7,7 +7,7 @@
  * toute la scénario est exécuté à l'intérieur de cette fenêtre : c'est le
  * seul contexte fidèle à ce que fera un visiteur.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { JSDOM } from "jsdom";
 
 let pass = 0, fail = 0;
@@ -30,6 +30,23 @@ const w = dom.window;
 w.fetch = globalThis.fetch;
 w.console = console;
 
+/* jsdom n'implémente pas ces API, et app.js s'en sert dès le premier rendu.
+   Les providing ici permet de vérifier la page telle qu'un visiteur la
+   charge — y compris son premier rendu. */
+w.matchMedia = () => ({ matches: false, addListener() {}, removeListener() {}, addEventListener() {}, removeEventListener() {} });
+w.requestAnimationFrame = (f) => setTimeout(f, 0);
+w.cancelAnimationFrame = (id) => clearTimeout(id);
+w.scrollTo = () => {};
+w.Element.prototype.scrollIntoView = () => {};
+w.Element.prototype.animate = () => ({ finished: Promise.resolve(), cancel() {} });
+class IntersectionObserver {
+  constructor(cb) { this.cb = cb; }
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+w.IntersectionObserver = IntersectionObserver;
+
 /* Un véhicule de travail, pour que le scénario ait de la matière. */
 const VEHICULE = "essai-client-direct";
 await admin(`vehicles?slug=eq.${VEHICULE}`, { method: "DELETE" });
@@ -45,9 +62,25 @@ await admin("vehicles", {
 });
 
 try {
-  /* Même ordre de chargement que index.html. */
-  for (const f of ["vendor/supabase.js", "assets/js/icons.js", "assets/js/data.js", "assets/js/data-source.js"]) {
-    w.eval(readFileSync(f, "utf8"));
+  /* Les fichiers sont lus dans l'ordre EXACT où index.html les charge. La liste
+     ci-dessous n'était qu'une recopie : elle a divergé du site réel, qui
+     pointait depuis des semaines vers un chemin supprimé — et tous les tests
+     passaient quand même, puisqu'ils ne passaient pas par index.html. */
+  const html = readFileSync("index.html", "utf8");
+  const references = [...html.matchAll(/<script[^>]+src="([^"]+)"/g)].map((m) => m[1]);
+  check("index.html déclare des scripts", references.length > 0, references.join(", "));
+
+  for (const ref of references) {
+    check(`« ${ref} » existe`, existsSync(ref));
+  }
+
+  for (const f of references) {
+    if (!existsSync(f)) continue;
+    try {
+      w.eval(readFileSync(f, "utf8"));
+    } catch (e) {
+      check(`« ${f} » se charge sans erreur`, false, e.message);
+    }
   }
 
   check("window.DATA exposé", !!w.DATA && !!w.DATA.CFG);
