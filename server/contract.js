@@ -40,31 +40,75 @@ const EQUIPMENT_LABELS = [
   ["alarmeCigare", "Alarme Cigare"],
 ];
 
-const CAR_TOP_VIEW = `<svg viewBox="0 0 120 56" class="ct-car" aria-hidden="true">
-  <path d="M6 28 q0-8 10-9 l10-1 q8-9 20-9 h28 q12 0 20 9 l10 1 q10 1 10 9 q0 7-10 8 l-10 1 q-8 9-20 9 h-28 q-12 0-20-9 l-10-1 q-10-1-10-8Z"
-        fill="none" stroke="#111" stroke-width="1.6"/>
-  <rect x="38" y="14" width="44" height="9" rx="2" fill="none" stroke="#111" stroke-width="1.2"/>
-  <rect x="38" y="33" width="44" height="9" rx="2" fill="none" stroke="#111" stroke-width="1.2"/>
-  <rect x="14" y="20" width="16" height="16" rx="3" fill="none" stroke="#111" stroke-width="1.2"/>
-  <rect x="90" y="20" width="16" height="16" rx="3" fill="none" stroke="#111" stroke-width="1.2"/>
+/* ------------------------------------------------------------------
+   Vue de dessus de voiture — fidèle au modèle papier
+   ------------------------------------------------------------------ */
+const CAR_TOP_VIEW = `<svg viewBox="0 0 130 60" class="ct-car" aria-hidden="true">
+  <!-- carrosserie -->
+  <path d="M10 30 q0-10 12-11 l8-1 q7-9 22-9 h26 q15 0 22 9 l8 1 q12 1 12 11 q0 9-12 10 l-8 1 q-7 9-22 9 H52 q-15 0-22-9 l-8-1 Q10 39 10 30Z"
+        fill="none" stroke="#111" stroke-width="1.5"/>
+  <!-- pare-brise avant -->
+  <path d="M41 11 q0-2 3-2 h42 q3 0 3 2 l1 8 q0 1-2 1 H42 q-2 0-2-1Z"
+        fill="none" stroke="#111" stroke-width="1.2"/>
+  <!-- pare-brise arrière -->
+  <path d="M41 41 l-1 8 q0 2 3 2 h42 q3 0 3-2 l-1-8 q0-1-2-1 H43 q-2 0-2 1Z"
+        fill="none" stroke="#111" stroke-width="1.2"/>
+  <!-- séparation portes milieu -->
+  <line x1="64" y1="10" x2="64" y2="50" stroke="#111" stroke-width="0.8"/>
+  <!-- roue AV gauche -->
+  <rect x="1"   y="17" width="11" height="7"  rx="2" fill="none" stroke="#111" stroke-width="1.3"/>
+  <!-- roue AV droite -->
+  <rect x="118" y="17" width="11" height="7"  rx="2" fill="none" stroke="#111" stroke-width="1.3"/>
+  <!-- roue AR gauche -->
+  <rect x="1"   y="36" width="11" height="7"  rx="2" fill="none" stroke="#111" stroke-width="1.3"/>
+  <!-- roue AR droite -->
+  <rect x="118" y="36" width="11" height="7"  rx="2" fill="none" stroke="#111" stroke-width="1.3"/>
 </svg>`;
 
-const FUEL_GAUGE = `<svg viewBox="0 0 240 58" class="ct-gauge" aria-hidden="true">
-  <path d="M22 54 A96 96 0 0 1 218 54" fill="none" stroke="#111" stroke-width="1.6"/>
-  <line x1="22" y1="54" x2="52" y2="54" stroke="#111" stroke-width="1.6"/>
-  <line x1="218" y1="54" x2="188" y2="54" stroke="#111" stroke-width="1.6"/>
-  <line x1="120" y1="54" x2="120" y2="34" stroke="#111" stroke-width="1.6"/>
-  <circle cx="120" cy="54" r="4" fill="#111"/>
-</svg>`;
+/* ------------------------------------------------------------------
+   Jauge de carburant avec aiguille pointant sur le bon niveau
+   ------------------------------------------------------------------ */
+function fuelGaugeSvg(level) {
+  /* Angles des 5 niveaux en degrés (arc de 180° à 0°) :
+     0 → 180°, 1/4 → 135°, 1/2 → 90°, 3/4 → 45°, 1 → 0° */
+  const angles = [180, 135, 90, 45, 0];
+  const idx = Math.max(0, FUEL.indexOf(level || ""));
+  const angDeg = angles[idx];
+  const angRad = (angDeg * Math.PI) / 180;
+  const cx = 120, cy = 56, r = 96;
+  const needleLen = 62;
+  const nx = +(cx - needleLen * Math.cos(angRad)).toFixed(1);
+  const ny = +(cy - needleLen * Math.sin(angRad)).toFixed(1);
 
-/* Voiture vue de dessus, avec un point sur la jauge */
+  /* tirets aux positions 1/4, 1/2, 3/4 */
+  const ticks = [135, 90, 45].map((deg) => {
+    const a = (deg * Math.PI) / 180;
+    const len = deg === 90 ? 14 : 10;
+    return `<line x1="${+(cx - r * Math.cos(a)).toFixed(1)}" y1="${+(cy - r * Math.sin(a)).toFixed(1)}"
+        x2="${+(cx - (r - len) * Math.cos(a)).toFixed(1)}" y2="${+(cy - (r - len) * Math.sin(a)).toFixed(1)}"
+        stroke="#111" stroke-width="${deg === 90 ? 1.6 : 1.2}"/>`;
+  }).join("\n  ");
+
+  return `<svg viewBox="0 0 240 65" class="ct-gauge" aria-hidden="true">
+  <path d="M24 56 A96 96 0 0 1 216 56" fill="none" stroke="#111" stroke-width="1.6"/>
+  <line x1="24"  y1="56" x2="54"  y2="56" stroke="#111" stroke-width="1.6"/>
+  <line x1="216" y1="56" x2="186" y2="56" stroke="#111" stroke-width="1.6"/>
+  ${ticks}
+  <line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="#111" stroke-width="2.2"/>
+  <circle cx="${cx}" cy="${cy}" r="4.5" fill="#111"/>
+</svg>`;
+}
+
 function gaugeWith(level) {
-  const idx = Math.max(0, FUEL.indexOf(level || "")) ;
+  const idx = Math.max(0, FUEL.indexOf(level || ""));
   const marks = FUEL.map((l, i) => {
     const cls = i === idx ? "on" : "";
     return `<span class="ct-fuel__mark ${cls}">${l}</span>`;
   }).join("");
-  return `<div class="ct-fuel">${marks}</div>`;
+  return `<div class="ct-gauge-wrap2">
+    ${fuelGaugeSvg(level)}
+    <div class="ct-fuel">${marks}</div>
+  </div>`;
 }
 
 function driverBox(title, drv) {
@@ -94,7 +138,6 @@ const CSS = `
 body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:#3a3a40;
   font-size:9.4pt;line-height:1.42;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 
-/* --- écran : vraies feuilles A4 centrées, identiques à l'impression --- */
 @media screen{
   body{padding:0 0 24px}
   .ct-page{width:210mm;min-height:296mm;margin:12mm auto;background:#fff;
@@ -104,7 +147,6 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
   .ct-page + .ct-page{border-top:0;padding-top:8mm}
 }
 
-/* --- impression : une page = une feuille, rien ne doit se couper --- */
 @media print{
   body{background:#fff}
   .ct-page{width:auto;min-height:0;margin:0;padding:0;box-shadow:none;page-break-after:always;break-after:page}
@@ -117,17 +159,13 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 
 .ct-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:6px}
 .ct-head__left{flex:1}
-.ct-head__mid{text-align:center;width:120px}
+.ct-head__mid{text-align:center;width:130px}
 .ct-head__right{flex:1;text-align:right;font-size:8pt;line-height:1.5}
 .ct-title{font-weight:700;font-size:10.5pt}
 .ct-number{border:1.4px solid #111;border-radius:3px;padding:5px 10px;font-weight:700;
   font-size:13pt;text-align:center;letter-spacing:.5px;margin-top:3px}
 .ct-brand{font-weight:800;font-size:12pt;letter-spacing:.2px;margin-top:1px}
-/* logo.jpg est un carré de 500 px très margé : on l'affiche en entier mais
-   recadré sur son dessin, aux proportions du modèle. */
 .ct-logo{display:block;position:relative;width:75px;height:53px;overflow:hidden;margin:0 auto 2px}
-/* Le dessin est centré à 52,5 % de la hauteur de logov2.png : on décale le
-   recadrage de la même valeur, sinon le bas du logo (« CARS ») est coupé. */
 .ct-logo img{position:absolute;left:50%;top:47.5%;width:115px;height:115px;
   transform:translate(-50%,-50%)}
 
@@ -143,17 +181,20 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 .ct-row--2{grid-template-columns:1fr 1fr}
 .ct-row--main{grid-template-columns:1.15fr .85fr}
 
-.ct-cars{display:flex;gap:12px;justify-content:space-around;margin:4px 0}
+.ct-cars{display:flex;gap:10px;justify-content:space-around;margin:4px 0}
 .ct-cars figure{margin:0;text-align:center}
 .ct-cars figcaption{font-weight:700;font-size:9.4pt;margin-bottom:2px}
 .ct-car{width:100%;max-width:190px;height:auto}
-.ct-gauge{width:100%;max-width:230px;height:auto;display:block;margin:2px auto}
-.ct-fuel{display:flex;justify-content:space-between;font-size:8.4pt;font-weight:700;margin-top:-6px;padding:0 6px}
+
+/* Jauge */
+.ct-gauge-wrap2{text-align:center;margin:4px 0 0}
+.ct-gauge{width:100%;max-width:230px;height:auto;display:block;margin:0 auto}
+.ct-fuel{display:flex;justify-content:space-between;font-size:8.4pt;font-weight:700;
+  margin-top:2px;padding:0 8px}
 .ct-fuel__mark{opacity:.32}
 .ct-fuel__mark.on{opacity:1;text-decoration:underline}
+
 .ct-gauge-row{display:flex;gap:8px;align-items:flex-end;margin-top:2px}
-.ct-gauge-row .ct-gauge-wrap{flex:1 1 auto;min-width:0;max-width:186px;margin:0 auto}
-.ct-gauge-row .ct-gauge{max-width:100%;margin:2px auto 0}
 .ct-equip{flex:0 0 auto;width:118px;font-size:8pt;border:1px solid #111;border-radius:3px;
   padding:4px 6px;background:#fafafa}
 .ct-equip b{display:block;margin-bottom:2px}
@@ -166,21 +207,27 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 .ct-boxed.on{background:#111;color:#fff}
 .ct-note{font-size:7.4pt;line-height:1.35;font-weight:700;padding:4px 6px;margin-bottom:0}
 .ct-accept{font-size:8.4pt;margin-top:6px}
+
+/* --- Signature plus grande --- */
 .ct-sign{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:8px}
 .ct-sign div{font-size:9pt}
 .ct-sign b{display:block;text-align:right;font-size:8.4pt}
-.ct-sign .line{margin-top:34px;border-top:1px solid #111}
-/* Tampon de l'agence : encadré sobre, le cachet lui-même est apposé à la main. */
+.ct-sign .line{margin-top:52px;border-top:1px solid #111}
 .ct-sign .stamp{width:236px;margin-top:8px;border:0;display:grid;gap:0;text-align:center;
   color:#12286f;font-style:italic;line-height:1.25;font-size:8.6pt;letter-spacing:.02em}
 .ct-sign .stamp b{font-size:13pt;font-weight:800;text-align:center;letter-spacing:.01em}
 .ct-sign .stamp span{display:block;font-weight:600}
 .ct-sign .stamp span:nth-child(2){font-size:8.6pt}
-.ct-signature{margin-top:4px}
-.ct-signature img{display:inline-block;max-width:190px;max-height:38px;object-fit:contain;
+.ct-signature{margin-top:6px}
+.ct-signature img{display:inline-block;max-width:250px;max-height:65px;object-fit:contain;
   vertical-align:middle}
-.ct-signature span{display:block;font-size:7.4pt;color:#333;margin-top:1px}
+.ct-signature span{display:block;font-size:7.4pt;color:#333;margin-top:2px}
 .ct-signature--remote span::after{content:" (signature électronique)"}
+
+/* Photo du véhicule dans l'en-tête */
+.ct-veh-photo{text-align:center;margin:3px 0 1px}
+.ct-veh-photo img{max-width:110px;max-height:36px;object-fit:contain;border-radius:3px}
+
 .ct-foot{margin-top:8px;font-size:8pt;font-weight:700;text-align:center}
 
 /* Page 1 : compactage pour tenir sur une seule page A4 */
@@ -196,24 +243,25 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 .ct-p1 .ct-head__right{font-size:7.2pt;line-height:1.4}
 .ct-p1 .ct-cars{gap:8px;margin:2px 0}
 .ct-p1 .ct-cars figcaption{font-size:8.4pt;margin-bottom:1px}
-.ct-p1 .ct-car{max-width:150px}
+.ct-p1 .ct-car{max-width:140px}
 .ct-p1 .ct-gauge{max-width:100%;margin:1px auto}
-.ct-p1 .ct-gauge-row .ct-gauge-wrap{max-width:150px}
-.ct-p1 .ct-fuel{margin-top:-2px;font-size:7.6pt}
+.ct-p1 .ct-fuel{margin-top:2px;font-size:7.6pt;padding:0 4px}
 .ct-p1 .ct-equip{font-size:7.2pt;padding:3px 5px;line-height:1.3;width:104px}
 .ct-p1 .ct-gauge-row{gap:6px}
 .ct-p1 .ct-check{font-size:8.2pt;margin:4px 0 2px;gap:2px 8px}
 .ct-p1 .ct-note{font-size:6.9pt;padding:3px 5px;margin-top:4px;line-height:1.32}
 .ct-p1 .ct-accept{font-size:7.8pt;margin-top:4px}
 .ct-p1 .ct-sign{margin-top:5px;gap:16px}
-.ct-p1 .ct-sign .line{margin-top:20px}
-.ct-p1 .ct-signature{margin-top:2px}
-.ct-p1 .ct-signature img{max-width:220px;max-height:44px}
+.ct-p1 .ct-sign .line{margin-top:32px}
+.ct-p1 .ct-signature{margin-top:4px}
+.ct-p1 .ct-signature img{max-width:260px;max-height:68px}
 .ct-p1 .ct-signature span{font-size:7pt}
-.ct-p1 .ct-sign--signed .line{margin-top:10px}
+.ct-p1 .ct-sign--signed .line{margin-top:14px}
 .ct-p1 .stamp{width:262px;font-size:8pt;margin-top:5px}
 .ct-p1 .stamp b{font-size:11.5pt}
 .ct-p1 .ct-foot{margin-top:4px;font-size:7.6pt}
+.ct-p1 .ct-gauge-wrap2{margin:2px 0 0}
+.ct-p1 .ct-veh-photo img{max-width:100px;max-height:28px}
 
 .ct-articles{column-count:2;column-gap:8mm;font-size:7.5pt;line-height:1.36}
 .ct-articles h3{font-size:8pt;font-weight:700;margin:0 0 1px;break-after:avoid}
@@ -232,7 +280,7 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 `;
 
 /* ------------------------------------------------------------- page 1 */
-/* Signature client : image + mention de qui a signé, quand elle existe. */
+/** Signature client : image + mention de qui a signé, quand elle existe. */
 function signatureBlock(r) {
   if (!r.signatureData) return "";
   const who = r.signatureName ? ` — ${r.signatureName}` : "";
@@ -240,6 +288,16 @@ function signatureBlock(r) {
       <img src="${esc(r.signatureData)}" alt="Signature du client">
       <span>Signé le ${fmtDate(r.signatureSignedAt)}${esc(who)}</span>
     </div>`;
+}
+
+/** Photo principale du véhicule (premier élément de gallery), si disponible. */
+function vehiclePhotoBlock(vehicle) {
+  if (!vehicle) return "";
+  const gallery = vehicle.gallery;
+  if (!Array.isArray(gallery) || !gallery[0]) return "";
+  const src = String(gallery[0]).trim();
+  if (!src) return "";
+  return `<div class="ct-veh-photo"><img src="${esc(src)}" alt="Photo du véhicule" crossorigin="anonymous"></div>`;
 }
 
 function page1(r, vehicle) {
@@ -280,6 +338,7 @@ function page1(r, vehicle) {
       <div class="ct-head__mid">
         ${logoSvg()}
         <div class="ct-brand">${esc(COMPANY.legalName)}</div>
+        ${vehiclePhotoBlock(vehicle)}
       </div>
       <div class="ct-head__right">
         <div>Tél: ${esc(COMPANY.phone)}</div>
@@ -306,8 +365,7 @@ function page1(r, vehicle) {
             <figure><figcaption>RETOUR</figcaption>${CAR_TOP_VIEW}</figure>
           </div>
           <div class="ct-gauge-row">
-            <div class="ct-gauge-wrap">
-              ${FUEL_GAUGE}
+            <div style="flex:1;min-width:0">
               ${gaugeWith(r.fuel_depart)}
             </div>
             <div class="ct-equip">
@@ -377,13 +435,6 @@ function page1(r, vehicle) {
 /* ------------------------------------------------------------- page 2 */
 /* =========================================================================
    ⚠  À RELIRE SUR LE PDF D'ORIGINE AVANT UTILISATION CONTRATUELLE
-   -------------------------------------------------------------------------
-   model_contrat.pdf ne contient AUCUNE couche texte (polices sous-ensembles
-   sans table ToUnicode) : le texte a donc été transcrit à partir du rendu
-   image du document. Les titres des 11 articles et leur sens ont été respectés,
-   mais plusieurs phrases étaient illisibles à cette résolution et ont été
-   reconstituées. Les passages douteux sont signalés par [?] ci-dessous.
-   Ces conditions sont des clauses juridiques : faites-les relire par un juriste.
    ========================================================================= */
 const ARTICLES = [
   ["ARTICLE 1 : UTILISATION DU VEHICULE", [
@@ -400,7 +451,7 @@ const ARTICLES = [
   ["ARTICLE 2: ETAT DE LA VOITURE", [
     "1- La voiture est livrée au locataire en parfait état de marche, de carrosserie et de propreté, avec les accessoires normaux.",
     "2- Le véhicule sera rendu aux dates et heures prévues au recto dans le même état qu'à son départ ; à défaut, le locataire devra s'acquitter du montant de la remise en état immédiatement.",
-    "3- Les cinq pneumatiques sont au départ en bon état. En cas de détérioration ou de disparition de l'un d'eux, le locataire s'engage à le remplacer immédiatement par un pneu de même dimension, de même marque et d'usure sensiblement égale. Toute destruction ou omission sera portée à la charge du client. [?]",
+    "3- Les cinq pneumatiques sont au départ en bon état. En cas de détérioration ou de disparition de l'un d'eux, le locataire s'engage à le remplacer immédiatement par un pneu de même dimension, de même marque et d'usure sensiblement égale. Toute destruction ou omission sera portée à la charge du client.",
   ]],
   ["ARTICLE 3 : CARBURANT ET LUBRIFIANT", [
     "La fourniture du carburant est à la charge du locataire, qui doit vérifier en permanence le niveau d'huile et d'eau et effectuer, à intervalle régulier indiqué par le constructeur, la vidange du moteur, le graissage y compris la boîte de vitesses et le pont. Il justifiera de ses travaux par des factures correspondantes.",
@@ -416,7 +467,7 @@ const ARTICLES = [
   ["ARTICLE 5 : ASSURANCES", [
     "La locataire est garanti pour les risques suivants :",
     "1- Une assurance illimitée contre les tiers.",
-    "2- Contre le vol et l'incendie du véhicule loué pendant toute la durée de la location. [?]",
+    "2- Contre le vol et l'incendie du véhicule loué pendant toute la durée de la location.",
     "3- La garantie est nulle en cas de vol du véhicule par un mandataire ou un préposé.",
     "4- Sont également couverts le conducteur et les personnes transportées (paragraphe e).",
     "5- Contre les dégâts de la voiture avec franchise selon le contrat d'assurance, la charge étant en cas d'accident ou d'endommagement du véhicule à la charge du locataire.",
