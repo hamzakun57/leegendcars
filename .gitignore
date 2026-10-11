@@ -3,9 +3,9 @@ node_modules/
 
 # -----------------------------------------------------------------------------
 # Données de l'application — NE JAMAIS versionner.
-# La base SQLite contient les réservations, les fiches clients (noms, CIN,
-# passeports) et l'empreinte du mot de passe administrateur.
-# Le dossier uploads/ contient les photos d'identités et les pièces jointes.
+# L'ancienne base SQLite et le dossier uploads/ contiennent les données des
+# clients (noms, CIN, passeports) et les pièces jointes. Tout est désormais
+# dans Supabase ; ces dossiers ne servent plus que hors production.
 server/data/
 uploads/
 
@@ -34,13 +34,14 @@ desktop.ini
 # Journaux
 *.log
 npm-debug.log*
-# ---------------------------------------------------------------------------
-# Fichiers générés par « npm run build » à partir de server/views.js et de
-# server/public/. Versionnés automatiquement par le build Netlify : les garder
-# hors dépôt évite deux versions de la même page.
-# ---------------------------------------------------------------------------
+
+# -----------------------------------------------------------------------------
+# Fichiers produits par « npm run build ».
+# Les pages d'administration sont générées depuis server/views.js et le client
+# Supabase est copié depuis node_modules : les garder hors du dépôt évite deux
+# versions de la même page. Le build Netlify les régénère à chaque déploiement.
+# -----------------------------------------------------------------------------
 admin/index.html
 admin/login.html
 admin-assets/
 vendor/
-assets/vendor/

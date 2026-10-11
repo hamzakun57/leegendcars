@@ -46,20 +46,20 @@ await admin("vehicles", {
 
 try {
   /* Même ordre de chargement que index.html. */
-  for (const f of ["assets/vendor/supabase.bundle.js", "assets/js/icons.js", "assets/js/data.js", "assets/js/data-source.js"]) {
+  for (const f of ["vendor/supabase.js", "assets/js/icons.js", "assets/js/data.js", "assets/js/data-source.js"]) {
     w.eval(readFileSync(f, "utf8"));
   }
 
   check("window.DATA exposé", !!w.DATA && !!w.DATA.CFG);
-  check("client Supabase embarqué", typeof w.SupabaseJS?.createClient === "function");
+  check("client Supabase embarqueé", typeof w.supabase?.createClient === "function");
   check("LCData présent", !!w.LCData);
   check("mode « supabase » (aucun serveur requis)", w.LCData?.mode === "supabase", w.LCData?.mode);
 
   /* Aucune clé secrète ne doitFuivre dans un fichier servi au navigateur. */
-  for (const f of ["assets/js/data.js", "assets/js/data-source.js", "index.html", "assets/vendor/supabase.bundle.js"]) {
+  for (const f of ["assets/js/data.js", "assets/js/data-source.js", "index.html", "vendor/supabase.js"]) {
     check(`pas de clé service_role dans ${f}`, !readFileSync(f, "utf8").includes(KEY));
   }
-  check("le bundle n'expose qu'un client public", !readFileSync("assets/vendor/supabase.bundle.js", "utf8").includes("service_role"));
+  check("le bundle n'expose qu'un client public", !readFileSync("vendor/supabase.js", "utf8").includes("service_role"));
 
   /* Le scénario s'exécute dans la fenêtre : même contexte qu'un visiteur. */
   const resultat = await w.eval(`

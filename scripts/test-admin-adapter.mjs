@@ -79,7 +79,7 @@ w.fetch = globalThis.fetch;
 w.console = console;
 /* JSDOM ne sait pas naviguer et fournit déjà un localStorage : on n'y touche
    pas, le test s'en sert comme un vrai navigateur. */
-for (const f of ["assets/vendor/supabase.bundle.js", "server/public/admin-config.js", "server/public/admin-api.js"]) {
+for (const f of ["vendor/supabase.js", "server/public/admin-config.js", "server/public/admin-api.js"]) {
   w.eval(readFileSync(f, "utf8"));
 }
 check("adaptateur présent", !!w.LCAdmin);

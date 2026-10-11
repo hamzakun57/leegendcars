@@ -23,8 +23,8 @@
   let client = null;
   const getClient = () => {
     if (client) return client;
-    if (!window.SupabaseJS) throw new Error("Client Supabase absent : lancez « npm run build ».");
-    client = window.SupabaseJS.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, {
+    if (!window.supabase) throw new Error("Client Supabase absent : lancez « npm run build ».");
+    client = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, {
       auth: { persistSession: true, autoRefreshToken: true, storageKey: "lc_admin_session" },
     });
     return client;

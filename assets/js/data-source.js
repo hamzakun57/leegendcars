@@ -42,10 +42,10 @@
     if (!c.supabaseUrl || !c.supabaseAnonKey) {
       throw new Error("Configuration Supabase manquante dans data.js.");
     }
-    if (!window.SupabaseJS || !window.SupabaseJS.createClient) {
+    if (!window.supabase || !window.supabase.createClient) {
       throw new Error("Client Supabase absent : lancez « npm run build ».");
     }
-    client = window.SupabaseJS.createClient(c.supabaseUrl, c.supabaseAnonKey, {
+    client = window.supabase.createClient(c.supabaseUrl, c.supabaseAnonKey, {
       auth: { persistSession: false, autoRefreshToken: false },
       db: { schema: "public" },
     });

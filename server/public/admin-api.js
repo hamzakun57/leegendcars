@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Couche d'accès aux données du back-office.
  *
  * L'écran (admin.js) appelle « api("/api/admin/…") » et attend une forme de
@@ -26,10 +26,10 @@
     if (!CFG.supabaseUrl || !CFG.supabaseAnonKey) {
       throw new Error("Configuration Supabase manquante.");
     }
-    if (!window.SupabaseJS || !window.SupabaseJS.createClient) {
+    if (!window.supabase || !window.supabase.createClient) {
       throw new Error("Client Supabase absent : lancez « npm run build ».");
     }
-    client = window.SupabaseJS.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, {
+    client = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, {
       auth: { persistSession: true, autoRefreshToken: true, storageKey: "lc_admin_session" },
       db: { schema: "public" },
     });

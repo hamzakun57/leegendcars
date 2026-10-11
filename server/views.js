@@ -11,7 +11,7 @@ const loginShell = (body) => `<!doctype html>
 <title>Administration — Leegend Cars</title>
 <link rel="stylesheet" href="/admin-assets/admin.css">
 <script src="/admin-assets/admin-config.js"></script>
-<script src="/vendor/supabase.bundle.js"></script>
+<script src="/vendor/supabase.js"></script>
 <script src="/admin-assets/theme.js"></script></head>
 <body><div class="wrap login">${body}</div></body></html>`;
 
@@ -245,7 +245,7 @@ const adminShell = () => `<!doctype html>
   </main>
 </div>
 <script src="/admin-assets/admin-config.js"></script>
-<script src="/vendor/supabase.bundle.js"></script>
+<script src="/vendor/supabase.js"></script>
 <script src="/admin-assets/admin-api.js"></script>
 <script src="/admin-assets/signature-pad.js"></script>
 <script src="/admin-assets/admin.js"></script>
