@@ -129,7 +129,7 @@ Deno.serve((requete) =>
 );
 
 const e = (s: unknown) =>
-  String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] ?? c));
 
 /* Page de signature : le minimal nécessaire, servie depuis la fonction pour
    que le client n'ait rien à installer. */
