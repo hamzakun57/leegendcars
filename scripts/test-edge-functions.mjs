@@ -129,7 +129,8 @@ try {
   check("jeton inexistant -> 404", (await appeler("signature", `/inconnu${"a".repeat(24)}`, { method: "GET", anon: ANON })).status === 404);
   const page = await appeler("signature", `/${jetonSignature}`, { method: "GET", anon: ANON });
   const htmlPage = await page.text();
-  check("page de signature servie", page.status === 200 && htmlPage.includes("Signature du contrat"), `HTTP ${page.status}`);
+  const pageData = JSON.parse(htmlPage);
+  check("données de signature et logo Leegend cars", page.status === 200 && pageData.ok && pageData.dossier.brand === "Leegend cars" && pageData.logo.startsWith("data:image/"), `HTTP ${page.status}`);
   /* La page publique ne doit montrer que ce que le client doit signer : ni CIN,
      ni passe灭port, ni règlements, ni notes internes. Le permis, lui, y
      figure — c'est la pièce que le client signe. */
@@ -137,13 +138,18 @@ try {
   check("la page ne fuit aucune donnée interne", fuites.length === 0, fuites.join(", "));
 
   const poste = await appeler("signature", `/${jetonSignature}`, {
-    body: { name: "Edge Fonctions", signature: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" },
+    body: { name: "Nom modifié", signature: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" },
     anon: ANON,
   });
   check("signature enregistrée", poste.status === 200, "HTTP " + poste.status);
   const signe = await admin(`reservations?id=eq.${id}&select=signature_status,signature_name,signature_mode`).then((x) => x.json());
-  check("signature visible côté admin", signe[0].signature_status === "signed" && signe[0].signature_mode === "remote",
+  check("signature visible côté admin et nom protégé", signe[0].signature_status === "signed" && signe[0].signature_mode === "remote" && signe[0].signature_name === "Edge Fonctions",
     `${signe[0].signature_status} / ${signe[0].signature_name}`);
+  const pageSignee = await appeler("signature", `/${jetonSignature}`, { method: "GET", anon: ANON }).then((x) => x.json());
+  check("contrat signé disponible après enregistrement", pageSignee.ok && pageSignee.signed);
+  const contratSigne = await appeler("signature", `/${jetonSignature}/contrat`, { method: "GET", anon: ANON }).then((x) => x.json());
+  check("contrat rendu avec la signature enregistrée",
+    !!contratSigne.html && contratSigne.html.includes('src="data:image/png;base64,') && contratSigne.html.includes('ct-signature--remote'));
 
   console.log("\n— envoi de fichiers —");
   const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
