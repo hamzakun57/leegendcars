@@ -63,12 +63,15 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
   body{background:#fff}
   .ct-page{width:auto;min-height:0;margin:0;padding:0;box-shadow:none;page-break-after:always;break-after:page}
   .ct-p1{min-height:281mm}
+  .ct-p2{min-height:281mm}
   .ct-page:last-child{page-break-after:auto;break-after:auto}
   .ct-page::before{display:none}
   .ct-box,.ct-row,.ct-sign,.ct-note,.ct-check,.ct-articles h3{break-inside:avoid;page-break-inside:avoid}
 }
 .ct-page + .ct-page{border-top:6px solid #111}
 @media print{.ct-page + .ct-page{padding-top:5mm}}
+.ct-p2{display:flex;flex-direction:column}
+.ct-p2 .ct-articles{flex:1}
 
 .ct-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:6px}
 .ct-head__left{flex:1}
@@ -361,8 +364,9 @@ function articlesHtml() {
 }
 
 function page2(r) {
-  return `<section class="ct-page" data-n="2 / 2">
+  return `<section class="ct-page ct-p2" data-n="2 / 2">
     <div class="ct-articles">${articlesHtml()}</div>
+    ${signatureBlock(r)}
     <div class="ct-foot" style="margin-top:14px">${esc(COMPANY.legalLine(COMPANY.ice, COMPANY.rc))}</div>
   </section>`;
 }

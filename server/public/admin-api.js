@@ -264,9 +264,20 @@
       return { user: { username: user.email, role: profil.role }, needsSetup: false };
     }
     if (seg[2] === "password" && methode === "POST") {
-      const { data } = await c.auth.getSession();
-      if (!data?.user) throw new Error("Non autorisé");
-      /* Supabase demande le mot de passe actuel : c'est lui qui vérifie. */
+      const current = String(corps.current || "");
+      const next = String(corps.next || "");
+      if (!current) throw new Error("Saisissez votre mot de passe actuel.");
+      if (next.length < 8) throw new Error("Mot de passe : 8 caractères minimum.");
+      const { data: sessionData } = await c.auth.getSession();
+      const user = sessionData?.session?.user;
+      if (!user?.email) throw new Error("Session expirée, reconnectez-vous.");
+      const { data: verified, error: verificationError } = await c.auth.signInWithPassword({
+        email: user.email,
+        password: current,
+      });
+      if (verificationError || verified?.user?.id !== user.id) {
+        throw new Error("Mot de passe actuel incorrect.");
+      }
       const { error } = await c.auth.updateUser({ password: corps.next });
       if (error) throw new Error(error.message);
       return { ok: true };
