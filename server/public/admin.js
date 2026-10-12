@@ -1778,7 +1778,7 @@
             <b style="font-size:16px">${esc(v.name)}</b>
             <span class="faint"> · <code>${esc(v.slug)}</code></span>
             ${v.en_service ? '<span class="tag confirmee">en service</span>' : '<span class="tag annulee">hors service</span>'}
-            ${v.active ? "" : ' <span class="tag annulee">masqué</span>'}
+            ${v.active ? '<span class="tag confirmee">Visible sur le site</span>' : '<span class="tag annulee">Masqué du site</span>'}
             <div class="faint">${esc([v.modele, v.categorie, v.couleur].filter(Boolean).join(" · ") || "—")}</div>
             <div class="faint">${esc(
               [
@@ -1792,7 +1792,7 @@
           </div>
         </div>
         <div class="row">
-          <button data-toggle="${esc(v.slug)}">${v.active ? "Masquer" : "Afficher"}</button>
+          <button data-toggle="${esc(v.slug)}">${v.active ? "Masquer du site" : "Afficher sur le site"}</button>
           <button data-edit="${esc(v.slug)}">Modifier</button>
           <button class="danger" data-del="${esc(v.slug)}">Supprimer</button>
         </div>
