@@ -363,7 +363,6 @@ function articlesHtml() {
 function page2(r) {
   return `<section class="ct-page" data-n="2 / 2">
     <div class="ct-articles">${articlesHtml()}</div>
-    ${signatureBlock(r)}
     <div class="ct-foot" style="margin-top:14px">${esc(COMPANY.legalLine(COMPANY.ice, COMPANY.rc))}</div>
   </section>`;
 }

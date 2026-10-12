@@ -152,6 +152,12 @@ try {
   const contratSigne = await appeler("signature", `/${jetonSignature}/contrat`, { method: "GET", anon: ANON }).then((x) => x.json());
   check("contrat rendu avec la signature enregistrée",
     !!contratSigne.html && contratSigne.html.includes('src="data:image/png;base64,') && contratSigne.html.includes('ct-signature--remote'));
+  const contratDom = new JSDOM(contratSigne.html || "");
+  const pagesContrat = contratDom.window.document.querySelectorAll(".ct-page");
+  check("contrat signé tient sur deux pages et la signature est en page 1",
+    pagesContrat.length === 2 &&
+      !!pagesContrat[0].querySelector(".ct-signature--remote") &&
+      !pagesContrat[1].querySelector(".ct-signature"));
 
   console.log("\n— envoi de fichiers —");
   const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
