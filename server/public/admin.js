@@ -1742,11 +1742,19 @@
     $$("[data-toggle]").forEach((b) =>
       b.addEventListener("click", async () => {
         const v = vehicles.find((x) => x.slug === b.dataset.toggle);
-        await api("/api/admin/vehicles/" + encodeURIComponent(v.slug), {
-          method: "PUT",
-          body: { active: !v.active },
-        });
-        loadVehicles();
+        if (!v) return flash("Véhicule introuvable. Actualisez la flotte puis réessayez.", "err");
+        b.disabled = true;
+        try {
+          await api("/api/admin/vehicles/" + encodeURIComponent(v.slug), {
+            method: "PUT",
+            body: { active: !v.active },
+          });
+          flash(v.active ? "Véhicule masqué du site." : "Véhicule affiché sur le site.");
+          await loadVehicles();
+        } catch (e) {
+          flash(e.message || "Impossible de modifier la visibilité du véhicule.", "err");
+          b.disabled = false;
+        }
       })
     );
     const sel = $("#bl-veh");

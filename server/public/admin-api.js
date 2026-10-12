@@ -1067,7 +1067,8 @@
     delete modifs.gallery;
 
     const vehicle = await lireVehicule(slug);
-    const galerie = await composerGalerie(corps, vehicle ? vehicle.gallery : []);
+    const galerieActuelle = vehicle ? enrichirVehicule(vehicle).gallery : [];
+    const galerie = await composerGalerie(corps, galerieActuelle);
 
     const maintenant = new Date().toISOString();
     if (!vehicle) {
