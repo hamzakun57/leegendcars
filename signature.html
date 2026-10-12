@@ -13,7 +13,10 @@
   body { font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; background: #f4f6f8; color: #15181d }
   .page { max-width: 680px; margin: 0 auto; padding: 28px 18px 60px }
   header { display: flex; align-items: center; gap: 16px; margin-bottom: 26px }
-  .brand-logo { display: block; width: 92px; height: 92px; object-fit: contain; flex: 0 0 auto }
+  .brand-logo-wrap { position: relative; display: block; width: 92px; height: 92px;
+                     overflow: hidden; flex: 0 0 auto }
+  .brand-logo { position: absolute; left: -33.333%; top: -37.778%; width: 166.667%;
+                height: 166.667%; max-width: none; object-fit: contain }
   .brand-name { font-size: clamp(1.6rem, 6vw, 2.2rem); line-height: 1.1; font-weight: 750;
                 letter-spacing: .01em; color: #282b30 }
   .card { background: #fff; border: 1px solid #e2e6ec; border-radius: 10px; padding: 20px;
@@ -61,7 +64,7 @@
   @media (max-width: 520px) {
     .page { padding: 22px 14px 40px }
     header { gap: 12px; margin-bottom: 20px }
-    .brand-logo { width: 76px; height: 76px }
+    .brand-logo-wrap { width: 76px; height: 76px }
     .welcome { padding: 18px 16px; font-size: 1.02rem }
     .card { padding: 16px }
     .kv { gap: 10px; font-size: .98rem }
@@ -142,7 +145,7 @@
 
     /* Header */
     var html = '<header>'
-      + '<img class="brand-logo" src="' + e(data.logo) + '" alt="Logo Leegend cars">'
+      + '<span class="brand-logo-wrap"><img class="brand-logo" src="' + e(data.logo) + '" alt="Logo Leegend cars"></span>'
       + '<div class="brand-name">Leegend cars</div>'
       + '</header>';
 

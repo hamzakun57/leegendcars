@@ -17,7 +17,8 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;background:#f4f6f8;col
 a{color:#9ad}
 .top{position:sticky;top:0;z-index:10;display:flex;gap:12px;align-items:center;flex-wrap:wrap;
   padding:12px 16px;background:#fff;border-bottom:1px solid #e2e6ec}
-.brand-logo{width:88px;height:88px;object-fit:contain}
+.brand-logo-wrap{position:relative;display:block;width:88px;height:88px;overflow:hidden;flex:0 0 auto}
+.brand-logo{position:absolute;left:-33.333%;top:-37.778%;width:166.667%;height:166.667%;max-width:none;object-fit:contain}
 .top b{font-weight:700;letter-spacing:.04em}
 .top .sep{color:#5b6270}
 .top .grow{flex:1}
@@ -77,7 +78,7 @@ export function signPageHtml(r, token) {
 </head>
 <body data-token="${esc(token)}" data-signed="${signed ? "1" : ""}">
   <div class="top">
-    <img class="brand-logo" src="${esc(COMPANY.logo)}" alt="Logo Leegend cars">
+    <span class="brand-logo-wrap"><img class="brand-logo" src="${esc(COMPANY.logo)}" alt="Logo Leegend cars"></span>
     <b>${esc(COMPANY.legalName)}</b>
     <span class="sep">·</span>
     <span>Contrat n° ${esc(r.contractNumber)}</span>
