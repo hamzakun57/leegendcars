@@ -1013,10 +1013,15 @@
 
   function subPieces() {
     const r = DOSSIER;
+    const useSignedAttachmentUrls = window.LCAdmin?.mode === "supabase";
     const rows = r.attachments.length
       ? r.attachments.map((a) => `<tr>
           <td>${esc(KIND_LABEL[a.kind] || a.kind)}</td>
-          <td><a href="/uploads/reservations/${esc(a.stored_name)}" target="_blank">${esc(a.original_name)}</a></td>
+          <td>${
+            useSignedAttachmentUrls
+              ? `<button type="button" data-att-open="${a.id}">${esc(a.original_name)}</button>`
+              : `<a href="/uploads/reservations/${esc(a.stored_name)}" target="_blank" rel="noopener">${esc(a.original_name)}</a>`
+          }</td>
           <td class="faint">${esc(a.mime)}</td>
           <td>${(a.size / 1024).toFixed(0)} Ko</td>
           <td class="faint">${esc(dt(a.created_at))}</td>
@@ -1060,7 +1065,7 @@
           <h2 style="margin-top:0">${isContract ? "Contrat de location" : "Facture"}</h2>
           <div class="faint">${
             isContract
-              ? "Document généré à partir du dossier — format du modèle Luxe Rif Car, 2 pages, prêt à imprimer en PDF."
+              ? "Document généré à partir du dossier — format du modèle Leegend Cars, 2 pages, prêt à imprimer en PDF."
               : "Document généré à partir du dossier et des règlements enregistrés, prêt à imprimer en PDF."
           }</div>
         </div>
@@ -1103,7 +1108,7 @@
       }
       <div class="doc">
         <div class="doc__head">
-          <div><b>LUXE RIF CAR</b><div class="faint">${dl("79 Rue Al Yemen, Tangier 90060")}</div></div>
+          <div><b>Leegend Cars</b><div class="faint">${dl("10 Rue ouarzazat hassan Rabat 90000")}</div></div>
           <div style="text-align:right">
             <b>${isContract ? "Contrat de location" : "Facture"}</b>
             <div class="faint">n° ${dl(docNumber)}</div>
@@ -1146,10 +1151,6 @@
                  </table>
                </div>`
         }
-        <div class="doc__sign">
-          <div>Signature du client<div class="sign"></div></div>
-          <div>Pour Luxe Rif Car<div class="sign"></div></div>
-        </div>
       </div>
     </div>`;
   }
@@ -1462,6 +1463,20 @@
         await reload(fresh);
       })
     );
+    $$("#dos-body [data-att-open]").forEach((b) =>
+      b.addEventListener("click", async () => {
+        const win = window.open("", "_blank");
+        try {
+          const { url } = await api(`/api/admin/attachments/${b.dataset.attOpen}/view`);
+          if (!url) throw new Error("Impossible d'ouvrir cette pièce jointe.");
+          if (win) win.location.href = url;
+          else window.open(url, "_blank");
+        } catch (e) {
+          if (win) win.close();
+          flash(e.message || "Erreur lors de l'ouverture de la pièce jointe.", "err");
+        }
+      })
+    );
 
     $("#d2-save")?.addEventListener("click", async () => {
       try {
@@ -1727,11 +1742,19 @@
     $$("[data-toggle]").forEach((b) =>
       b.addEventListener("click", async () => {
         const v = vehicles.find((x) => x.slug === b.dataset.toggle);
-        await api("/api/admin/vehicles/" + encodeURIComponent(v.slug), {
-          method: "PUT",
-          body: { active: !v.active },
-        });
-        loadVehicles();
+        if (!v) return flash("Véhicule introuvable. Actualisez la flotte puis réessayez.", "err");
+        b.disabled = true;
+        try {
+          await api("/api/admin/vehicles/" + encodeURIComponent(v.slug), {
+            method: "PUT",
+            body: { active: !v.active },
+          });
+          flash(v.active ? "Véhicule masqué du site." : "Véhicule affiché sur le site.");
+          await loadVehicles();
+        } catch (e) {
+          flash(e.message || "Impossible de modifier la visibilité du véhicule.", "err");
+          b.disabled = false;
+        }
       })
     );
     const sel = $("#bl-veh");
@@ -1763,7 +1786,7 @@
             <b style="font-size:16px">${esc(v.name)}</b>
             <span class="faint"> · <code>${esc(v.slug)}</code></span>
             ${v.en_service ? '<span class="tag confirmee">en service</span>' : '<span class="tag annulee">hors service</span>'}
-            ${v.active ? "" : ' <span class="tag annulee">masqué</span>'}
+            ${v.active ? '<span class="tag confirmee">Visible sur le site</span>' : '<span class="tag annulee">Masqué du site</span>'}
             <div class="faint">${esc([v.modele, v.categorie, v.couleur].filter(Boolean).join(" · ") || "—")}</div>
             <div class="faint">${esc(
               [
@@ -1777,7 +1800,7 @@
           </div>
         </div>
         <div class="row">
-          <button data-toggle="${esc(v.slug)}">${v.active ? "Masquer" : "Afficher"}</button>
+          <button data-toggle="${esc(v.slug)}">${v.active ? "Masquer du site" : "Afficher sur le site"}</button>
           <button data-edit="${esc(v.slug)}">Modifier</button>
           <button class="danger" data-del="${esc(v.slug)}">Supprimer</button>
         </div>
@@ -1904,8 +1927,6 @@
 
       <div class="row" style="margin-top:16px">
         <button type="button" class="primary" id="save">Enregistrer</button>
-        <label class="chk"><input type="checkbox" id="f-active" ${v.active ? "checked" : ""}> Visible sur le site</label>
-        <label class="chk"><input type="checkbox" id="f-service" ${v.en_service ? "checked" : ""}> En service</label>
       </div>
     </div>`
     );
@@ -1994,8 +2015,8 @@
         description: lines("#f-desc"),
         ideal_for: lines("#f-ideal"),
         tiers,
-        active: $("#f-active").checked,
-        en_service: $("#f-service").checked,
+        active: !!v.active,
+        en_service: !!v.en_service,
         keepPhotos: photos,
         removePhotos: removed,
         photos: previews,

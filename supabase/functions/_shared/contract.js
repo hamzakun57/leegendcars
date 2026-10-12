@@ -62,6 +62,7 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 @media print{
   body{background:#fff}
   .ct-page{width:auto;min-height:0;margin:0;padding:0;box-shadow:none;page-break-after:always;break-after:page}
+  .ct-p1{min-height:281mm}
   .ct-page:last-child{page-break-after:auto;break-after:auto}
   .ct-page::before{display:none}
   .ct-box,.ct-row,.ct-sign,.ct-note,.ct-check,.ct-articles h3{break-inside:avoid;page-break-inside:avoid}
@@ -71,14 +72,14 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 
 .ct-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:6px}
 .ct-head__left{flex:1}
-.ct-head__mid{text-align:center;width:130px}
+.ct-head__mid{text-align:center;width:150px}
 .ct-head__right{flex:1;text-align:right;font-size:8pt;line-height:1.5}
 .ct-title{font-weight:700;font-size:10.5pt}
 .ct-number{border:1.4px solid #111;border-radius:6px;padding:5px 10px;font-weight:700;
   font-size:13pt;text-align:center;letter-spacing:.5px;margin-top:3px}
 .ct-brand{font-weight:800;font-size:12pt;letter-spacing:.2px;margin-top:1px}
-.ct-logo{display:block;position:relative;width:95px;height:53px;overflow:hidden;margin:0 auto 2px}
-.ct-logo img{max-height:53px;max-width:100%;object-fit:contain;display:inline-block}
+.ct-logo{display:block;position:relative;width:140px;height:105px;overflow:hidden;margin:0 auto 2px}
+.ct-logo img{display:block}
 
 .ct-box{border:1.4px solid #111;border-radius:4px;padding:5px 7px;margin-bottom:6px}
 .ct-box__title{text-align:center;font-weight:700;background:#ececec;border-radius:2px;
@@ -117,27 +118,27 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 
 .ct-foot{margin-top:8px;font-size:8pt;font-weight:700;text-align:center}
 
-/* Page 1 compactée pour tenir exactement sur A4 */
-.ct-p1{font-size:8.2pt;line-height:1.28}
-.ct-p1 .ct-box{padding:3px 5px;margin-bottom:4px}
-.ct-p1 .ct-box__title{margin-bottom:2px;padding:0;font-size:8.6pt}
-.ct-p1 .ct-line{font-size:8pt}
-.ct-p1 .ct-line b{padding-bottom:0}
-.ct-p1 .ct-row{gap:5px}
-.ct-p1 .ct-head{margin-bottom:4px}
+/* Page 1 uses the available A4 space for more legible contract details. */
+.ct-p1{display:flex;flex-direction:column;font-size:10pt;line-height:1.42}
+.ct-p1 .ct-box{padding:5px 7px;margin-bottom:6px}
+.ct-p1 .ct-box__title{margin-bottom:4px;padding:1px 0;font-size:10pt}
+.ct-p1 .ct-line{font-size:9.6pt}
+.ct-p1 .ct-line b{padding-bottom:2px}
+.ct-p1 .ct-row{gap:7px}
+.ct-p1 .ct-head{margin-bottom:6px}
 .ct-p1 .ct-number{padding:3px 8px;font-size:11.5pt;margin-top:2px}
-.ct-p1 .ct-brand{font-size:9.6pt}
-.ct-p1 .ct-head__right{font-size:7.2pt;line-height:1.4}
-.ct-p1 .ct-check{font-size:8.2pt;margin:4px 0 2px;gap:2px 8px}
-.ct-p1 .ct-note{font-size:6.9pt;padding:3px 5px;margin-top:4px;line-height:1.32}
-.ct-p1 .ct-accept{font-size:7.8pt;margin-top:4px}
-.ct-p1 .ct-sign{margin-top:5px;gap:16px}
-.ct-p1 .ct-sign .line{margin-top:28px}
+.ct-p1 .ct-brand{font-size:11pt}
+.ct-p1 .ct-head__right{font-size:8.5pt;line-height:1.5}
+.ct-p1 .ct-check{font-size:9.6pt;margin:6px 0 4px;gap:4px 9px}
+.ct-p1 .ct-note{font-size:8pt;padding:5px 7px;margin-top:6px;line-height:1.42}
+.ct-p1 .ct-accept{font-size:9.2pt;margin-top:6px}
+.ct-p1 .ct-sign{margin-top:auto;gap:16px}
+.ct-p1 .ct-sign .line{margin-top:32px}
 .ct-p1 .ct-stamp{max-width:230px;max-height:80px}
 .ct-p1 .ct-signature img{max-width:280px;max-height:85px}
-.ct-p1 .ct-signature span{font-size:7pt}
+.ct-p1 .ct-signature span{font-size:8pt}
 .ct-p1 .ct-sign--signed .line{margin-top:8px}
-.ct-p1 .ct-foot{margin-top:4px;font-size:7.6pt}
+.ct-p1 .ct-foot{margin-top:5px;font-size:8.6pt}
 
 .ct-articles{column-count:2;column-gap:8mm;font-size:7.5pt;line-height:1.36}
 .ct-articles h3{font-size:8pt;font-weight:700;margin:0 0 1px;break-after:avoid}
@@ -199,13 +200,14 @@ function page1(r, vehicle) {
         <div class="ct-number">${esc(r.contractNumber)}</div>
       </div>
       <div class="ct-head__mid">
-        ${logoSvg()}
+        ${logoSvg(105, 140)}
         <div class="ct-brand">${esc(COMPANY.legalName)}</div>
       </div>
       <div class="ct-head__right">
+        <div>LUXE RIF CAR</div>
+        <div>10 Rue Ouarzazat Hassan, Rabat 90000</div>
         <div>Tél: ${esc(COMPANY.phone)}</div>
         <div>Email: ${esc(COMPANY.email)}</div>
-        ${COMPANY.addressLines.map((l) => `<div>${esc(l)}</div>`).join("")}
       </div>
     </header>
 

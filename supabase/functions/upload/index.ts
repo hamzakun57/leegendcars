@@ -17,6 +17,21 @@ Deno.serve((requete) =>
     const { client } = await exigerAdmin(requete);
     const data = await corps(requete);
 
+    /* ---------- lecture temporaire d'une pièce de dossier ---------- */
+    if (data.action === "signed-url") {
+      const cle = nomSure(data.stored_name);
+      const nomFichier = cle?.split("/").pop() || "";
+      if (!cle || !/^[\w-]+\.(jpg|jpeg|png|webp|pdf)$/.test(nomFichier)) {
+        throw new ErreurHttp(400, "Fichier non reconnu.");
+      }
+      const { data: signe, error } = await client.storage
+        .from(BUCKET)
+        .createSignedUrl(`${BUCKET}/reservations/${nomFichier}`, 5 * 60);
+      if (error) throw error;
+      if (!signe?.signedUrl) throw new Error("Impossible de créer le lien temporaire du fichier.");
+      return json({ url: new URL(signe.signedUrl, Deno.env.get("SUPABASE_URL")).toString() });
+    }
+
     /* ---------- suppression ---------- */
     if (data.action === "delete") {
       /* La clé est reconstruite par nomSure, jamais recopiée : une URL, un
@@ -66,7 +81,7 @@ Deno.serve((requete) =>
           const f = await envoyer(client, valider(dataUrl, { max: MAX_PHOTO, sousDossier: "photos" }));
           chemins.push(cheminPublic("photos", f.nom));
         } catch (e) {
-          avertissements.push(e.message);
+          avertissements.push(e instanceof Error ? e.message : String(e));
         }
       }
       return json({ ok: true, paths: chemins, warnings: avertissements });
@@ -105,7 +120,7 @@ Deno.serve((requete) =>
           created_at: new Date().toISOString(),
         });
       } catch (e) {
-        avertissements.push(e.message);
+        avertissements.push(e instanceof Error ? e.message : String(e));
       }
     }
 
