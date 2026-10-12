@@ -109,9 +109,10 @@ function head(r) {
       ${logoSvg(105, 140)}
     </div>
     <div class="fv-head__right">
+      <div>LUXE RIF CAR</div>
+      <div>79 Rue Al Yemen, Tangier 90060</div>
       <div>Tél: ${esc(COMPANY.phone)}</div>
       <div>Email: ${esc(COMPANY.email)}</div>
-      ${COMPANY.addressLines.map((l) => `<div>${esc(l)}</div>`).join("")}
     </div>
   </header>`;
 }

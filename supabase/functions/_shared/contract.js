@@ -204,9 +204,10 @@ function page1(r, vehicle) {
         <div class="ct-brand">${esc(COMPANY.legalName)}</div>
       </div>
       <div class="ct-head__right">
+        <div>LUXE RIF CAR</div>
+        <div>79 Rue Al Yemen, Tangier 90060</div>
         <div>Tél: ${esc(COMPANY.phone)}</div>
         <div>Email: ${esc(COMPANY.email)}</div>
-        ${COMPANY.addressLines.map((l) => `<div>${esc(l)}</div>`).join("")}
       </div>
     </header>
 
