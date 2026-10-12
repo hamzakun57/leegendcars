@@ -95,6 +95,14 @@ try {
      mécanisme, volontairement conservé). */
   const connexion = await w.eval(`window.LCAdmin.api("/api/admin/login", { method: "POST", body: { email: ${JSON.stringify(EMAIL)}, password: ${JSON.stringify(PASS)} } })`);
   check("connexion administrateur", connexion && connexion.ok === true);
+  let refusMotDePasseActuel = "";
+  try {
+    await w.eval(`window.LCAdmin.api("/api/admin/password", { method: "POST", body: { current: "mot-de-passe-incorrect", next: "nouveau-test-123" } })`);
+  } catch (e) {
+    refusMotDePasseActuel = e.message;
+  }
+  check("changement de mot de passe vérifie le mot de passe actuel",
+    refusMotDePasseActuel === "Mot de passe actuel incorrect.", refusMotDePasseActuel);
 
   const moi = await fetch(`${B}/api/admin/me`, { headers: { cookie: cookieServeur } }).then((r) => r.json());
   const moiAdaptateur = await w.eval(`window.LCAdmin.api("/api/admin/me")`);

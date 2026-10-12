@@ -245,6 +245,7 @@ const adminShell = () => `<!doctype html>
         <label>Mot de passe actuel</label><input id="pw-cur" type="password" autocomplete="current-password">
         <label>Nouveau mot de passe</label><input id="pw-new" type="password" autocomplete="new-password">
         <div class="row" style="margin-top:14px"><button class="primary" id="pw-save">Enregistrer</button></div>
+        <div id="pw-msg" role="status" aria-live="polite" style="margin-top:12px"></div>
       </div>
     </section>
 

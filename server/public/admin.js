@@ -2092,15 +2092,26 @@
 
   /* ---------- settings ---------- */
   $("#pw-save").addEventListener("click", async () => {
+    const message = $("#pw-msg");
+    const button = $("#pw-save");
+    message.className = "";
+    message.textContent = "";
+    button.disabled = true;
     try {
+      if (!$("#pw-cur").value) throw new Error("Saisissez votre mot de passe actuel.");
+      if (!$("#pw-new").value) throw new Error("Saisissez un nouveau mot de passe.");
       await api("/api/admin/password", {
         method: "POST",
         body: { current: $("#pw-cur").value, next: $("#pw-new").value },
       });
-      flash("Mot de passe modifié.");
+      message.className = "ok";
+      message.textContent = "Mot de passe modifié.";
       $("#pw-cur").value = $("#pw-new").value = "";
     } catch (e) {
-      flash(e.message, "err");
+      message.className = "err";
+      message.textContent = e.message || "Impossible de modifier le mot de passe.";
+    } finally {
+      button.disabled = false;
     }
   });
 
