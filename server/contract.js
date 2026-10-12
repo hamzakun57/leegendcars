@@ -118,27 +118,27 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 
 .ct-foot{margin-top:8px;font-size:8pt;font-weight:700;text-align:center}
 
-/* Page 1 compactée pour tenir exactement sur A4 */
-.ct-p1{display:flex;flex-direction:column;font-size:8.2pt;line-height:1.28}
-.ct-p1 .ct-box{padding:3px 5px;margin-bottom:4px}
-.ct-p1 .ct-box__title{margin-bottom:2px;padding:0;font-size:8.6pt}
-.ct-p1 .ct-line{font-size:8pt}
-.ct-p1 .ct-line b{padding-bottom:0}
-.ct-p1 .ct-row{gap:5px}
+/* Page 1 uses the available A4 space for more legible contract details. */
+.ct-p1{display:flex;flex-direction:column;font-size:9pt;line-height:1.35}
+.ct-p1 .ct-box{padding:4px 6px;margin-bottom:5px}
+.ct-p1 .ct-box__title{margin-bottom:3px;padding:0;font-size:9.2pt}
+.ct-p1 .ct-line{font-size:8.8pt}
+.ct-p1 .ct-line b{padding-bottom:1px}
+.ct-p1 .ct-row{gap:6px}
 .ct-p1 .ct-head{margin-bottom:4px}
 .ct-p1 .ct-number{padding:3px 8px;font-size:11.5pt;margin-top:2px}
-.ct-p1 .ct-brand{font-size:9.6pt}
-.ct-p1 .ct-head__right{font-size:7.2pt;line-height:1.4}
-.ct-p1 .ct-check{font-size:8.2pt;margin:4px 0 2px;gap:2px 8px}
-.ct-p1 .ct-note{font-size:6.9pt;padding:3px 5px;margin-top:4px;line-height:1.32}
-.ct-p1 .ct-accept{font-size:7.8pt;margin-top:4px}
+.ct-p1 .ct-brand{font-size:10.2pt}
+.ct-p1 .ct-head__right{font-size:7.8pt;line-height:1.45}
+.ct-p1 .ct-check{font-size:8.8pt;margin:5px 0 3px;gap:3px 8px}
+.ct-p1 .ct-note{font-size:7.5pt;padding:4px 6px;margin-top:5px;line-height:1.38}
+.ct-p1 .ct-accept{font-size:8.5pt;margin-top:5px}
 .ct-p1 .ct-sign{margin-top:auto;gap:16px}
-.ct-p1 .ct-sign .line{margin-top:28px}
+.ct-p1 .ct-sign .line{margin-top:32px}
 .ct-p1 .ct-stamp{max-width:230px;max-height:80px}
 .ct-p1 .ct-signature img{max-width:280px;max-height:85px}
-.ct-p1 .ct-signature span{font-size:7pt}
+.ct-p1 .ct-signature span{font-size:7.6pt}
 .ct-p1 .ct-sign--signed .line{margin-top:8px}
-.ct-p1 .ct-foot{margin-top:4px;font-size:7.6pt}
+.ct-p1 .ct-foot{margin-top:4px;font-size:8.2pt}
 
 .ct-articles{column-count:2;column-gap:8mm;font-size:7.5pt;line-height:1.36}
 .ct-articles h3{font-size:8pt;font-weight:700;margin:0 0 1px;break-after:avoid}
