@@ -78,7 +78,7 @@ export function signPageHtml(r, token) {
 </head>
 <body data-token="${esc(token)}" data-signed="${signed ? "1" : ""}">
   <div class="top">
-    <span class="brand-logo-wrap"><img class="brand-logo" src="${esc(COMPANY.logo)}" alt="Logo Leegend cars"></span>
+    <span class="brand-logo-wrap"><img class="brand-logo" src="${esc(COMPANY.logo)}" alt="Logo Leegend Cars"></span>
     <b>${esc(COMPANY.legalName)}</b>
     <span class="sep">·</span>
     <span>Contrat n° ${esc(r.contractNumber)}</span>

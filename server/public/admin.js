@@ -1458,9 +1458,16 @@
     $$("#dos-body [data-att-del]").forEach((b) =>
       b.addEventListener("click", async () => {
         if (!confirm("Supprimer cette pièce jointe ?")) return;
-        await api("/api/admin/attachments/" + b.dataset.attDel, { method: "DELETE" });
-        const fresh = (await api("/api/admin/reservations/" + r.id)).reservation;
-        await reload(fresh);
+        b.disabled = true;
+        try {
+          await api("/api/admin/attachments/" + b.dataset.attDel, { method: "DELETE" });
+          const fresh = (await api("/api/admin/reservations/" + r.id)).reservation;
+          flash("Pièce jointe supprimée.");
+          await reload(fresh);
+        } catch (e) {
+          flash(e.message || "Impossible de supprimer la pièce jointe.", "err");
+          b.disabled = false;
+        }
       })
     );
     $$("#dos-body [data-att-open]").forEach((b) =>

@@ -107,10 +107,12 @@ try {
   const htmlContrat = await contrat.text();
   check("contrat généré", contrat.status === 200 && htmlContrat.includes("Contrat"), `HTTP ${contrat.status}, ${htmlContrat.length} o`);
   check("contrat en HTML complet", htmlContrat.trimStart().startsWith("<!doctype") || htmlContrat.includes("<html"));
+  check("en-tête du contrat au nom de Leegend Cars", htmlContrat.includes("<div>Leegend Cars</div>") && !htmlContrat.includes("LUXE RIF CAR"));
 
   const facture = await appeler("document", "", { body: { id, document: "invoice" }, jeton: JETON });
   const htmlFacture = await facture.text();
   check("facture générée", facture.status === 200 && htmlFacture.includes("FACTURE"), `HTTP ${facture.status}, ${htmlFacture.length} o`);
+  check("en-tête de la facture au nom de Leegend Cars", htmlFacture.includes("<div>Leegend Cars</div>") && !htmlFacture.includes("LUXE RIF CAR"));
   const numero = (htmlFacture.match(/F\d{4}-\d{4}/) || [])[0];
   check("numéro de facture attribué", !!numero, numero);
 
@@ -130,7 +132,7 @@ try {
   const page = await appeler("signature", `/${jetonSignature}`, { method: "GET", anon: ANON });
   const htmlPage = await page.text();
   const pageData = JSON.parse(htmlPage);
-  check("données de signature et logo Leegend cars", page.status === 200 && pageData.ok && pageData.dossier.brand === "Leegend cars" && pageData.logo.startsWith("data:image/"), `HTTP ${page.status}`);
+  check("données de signature et logo Leegend Cars", page.status === 200 && pageData.ok && pageData.dossier.brand === "Leegend Cars" && pageData.logo.startsWith("data:image/"), `HTTP ${page.status}`);
   /* La page publique ne doit montrer que ce que le client doit signer : ni CIN,
      ni passe灭port, ni règlements, ni notes internes. Le permis, lui, y
      figure — c'est la pièce que le client signe. */
@@ -150,6 +152,12 @@ try {
   const contratSigne = await appeler("signature", `/${jetonSignature}/contrat`, { method: "GET", anon: ANON }).then((x) => x.json());
   check("contrat rendu avec la signature enregistrée",
     !!contratSigne.html && contratSigne.html.includes('src="data:image/png;base64,') && contratSigne.html.includes('ct-signature--remote'));
+  const contratDom = new JSDOM(contratSigne.html || "");
+  const pagesContrat = contratDom.window.document.querySelectorAll(".ct-page");
+  check("contrat signé tient sur deux pages et la signature est en page 1",
+    pagesContrat.length === 2 &&
+      !!pagesContrat[0].querySelector(".ct-signature--remote") &&
+      !pagesContrat[1].querySelector(".ct-signature"));
 
   console.log("\n— envoi de fichiers —");
   const PNG = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
@@ -185,7 +193,8 @@ try {
     check("fichier présent dans le bucket", telecharge.status === 200, `HTTP ${telecharge.status}`);
 
     const supprime = await appeler("upload", "", { body: { action: "delete", stored_name: stockage.stored_name }, jeton: JETON });
-    check("fichier supprimé", supprime.status === 200, "HTTP " + supprime.status);
+    const resultatSuppression = await supprime.json().catch(() => ({}));
+    check("fichier supprimé", supprime.status === 200 && resultatSuppression.supprime === true, `HTTP ${supprime.status}`);
     /* On interroge la liste des objets, pas un GET : le CDN de Supabase peut
        encore servir une copie en cache quelques secondes après la suppression,
        alors que l'objet a réellement disparu. */

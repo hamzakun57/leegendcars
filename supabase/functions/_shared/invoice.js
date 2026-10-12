@@ -109,7 +109,7 @@ function head(r) {
       ${logoSvg(105, 140)}
     </div>
     <div class="fv-head__right">
-      <div>LUXE RIF CAR</div>
+      <div>Leegend Cars</div>
       <div>10 Rue Ouarzazat Hassan, Rabat 90000</div>
       <div>Tél: ${esc(COMPANY.phone)}</div>
       <div>Email: ${esc(COMPANY.email)}</div>
