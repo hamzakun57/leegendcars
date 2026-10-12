@@ -198,13 +198,12 @@ function document_(r, vehicle) {
 
     <div class="fv-sign">
       <div>Signature du client<div class="line"></div></div>
-      <div>Cachet et signature — ${esc(COMPANY.legalName)}<div class="line"></div></div>
-    </div>
-
-    <div class="fv-stamp">
-      ${esc(COMPANY.legalName)}<br>
-      ${COMPANY.addressLines.map((l) => esc(l)).join("<br>")}<br>
-      ICE : ${esc(COMPANY.ice)} — RC : ${esc(COMPANY.rc)}
+      <div>
+        Cachet et signature — ${esc(COMPANY.legalName)}
+        <div style="margin-top:4px">
+          <img src="${COMPANY.stampImg}" alt="Cachet et signature" style="max-height:85px;max-width:240px;object-fit:contain;display:block">
+        </div>
+      </div>
     </div>
 
     <div class="fv-foot">ICE : ${esc(COMPANY.ice)} - RC : ${esc(COMPANY.rc)}</div>

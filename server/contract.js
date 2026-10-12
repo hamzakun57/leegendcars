@@ -11,7 +11,6 @@ const fmtDate = (iso, withTime) => {
   const base = dt.toLocaleDateString("fr-FR");
   return withTime && iso.length > 10 ? `${base} ${String(iso).slice(11, 16)}` : base;
 };
-/** Date au format du modèle : 2026-03-10, avec l'heure si elle est fournie. */
 const fmtIso = (iso, heure) => {
   if (!iso) return "";
   const s = String(iso);
@@ -20,96 +19,9 @@ const fmtIso = (iso, heure) => {
   const h = heure || (s.length > 10 ? s.slice(11, 16) : "");
   return h ? `${jour} ${h}` : jour;
 };
-/** Date seule, au format du modèle : 2026-05-10. */
 const fmtIsoDate = (iso) => (iso ? String(iso).slice(0, 10) : "");
-/** Ligne « libellé : valeur » avec pointillés, comme le modèle. */
 const line = (label, value) =>
   `<div class="ct-line"><span>${label}</span><b>${value ? esc(value) : ""}</b></div>`;
-const val = (v) => (v ? esc(v) : "");
-
-const FUEL = ["0", "1/4", "1/2", "3/4", "1"];
-
-const EQUIPMENT_LABELS = [
-  ["batterie", "Batterie"],
-  ["outils", "Outils"],
-  ["retroExt", "Retro-ext"],
-  ["feux", "Feux"],
-  ["galerie", "Galerie"],
-  ["posteRadio", "Poste Radio"],
-  ["pressuSecours", "Pressu Secours"],
-  ["alarmeCigare", "Alarme Cigare"],
-];
-
-/* ------------------------------------------------------------------
-   Vue de dessus de voiture — fidèle au modèle papier
-   ------------------------------------------------------------------ */
-const CAR_TOP_VIEW = `<svg viewBox="0 0 130 60" class="ct-car" aria-hidden="true">
-  <!-- carrosserie -->
-  <path d="M10 30 q0-10 12-11 l8-1 q7-9 22-9 h26 q15 0 22 9 l8 1 q12 1 12 11 q0 9-12 10 l-8 1 q-7 9-22 9 H52 q-15 0-22-9 l-8-1 Q10 39 10 30Z"
-        fill="none" stroke="#111" stroke-width="1.5"/>
-  <!-- pare-brise avant -->
-  <path d="M41 11 q0-2 3-2 h42 q3 0 3 2 l1 8 q0 1-2 1 H42 q-2 0-2-1Z"
-        fill="none" stroke="#111" stroke-width="1.2"/>
-  <!-- pare-brise arrière -->
-  <path d="M41 41 l-1 8 q0 2 3 2 h42 q3 0 3-2 l-1-8 q0-1-2-1 H43 q-2 0-2 1Z"
-        fill="none" stroke="#111" stroke-width="1.2"/>
-  <!-- séparation portes milieu -->
-  <line x1="64" y1="10" x2="64" y2="50" stroke="#111" stroke-width="0.8"/>
-  <!-- roue AV gauche -->
-  <rect x="1"   y="17" width="11" height="7"  rx="2" fill="none" stroke="#111" stroke-width="1.3"/>
-  <!-- roue AV droite -->
-  <rect x="118" y="17" width="11" height="7"  rx="2" fill="none" stroke="#111" stroke-width="1.3"/>
-  <!-- roue AR gauche -->
-  <rect x="1"   y="36" width="11" height="7"  rx="2" fill="none" stroke="#111" stroke-width="1.3"/>
-  <!-- roue AR droite -->
-  <rect x="118" y="36" width="11" height="7"  rx="2" fill="none" stroke="#111" stroke-width="1.3"/>
-</svg>`;
-
-/* ------------------------------------------------------------------
-   Jauge de carburant avec aiguille pointant sur le bon niveau
-   ------------------------------------------------------------------ */
-function fuelGaugeSvg(level) {
-  /* Angles des 5 niveaux en degrés (arc de 180° à 0°) :
-     0 → 180°, 1/4 → 135°, 1/2 → 90°, 3/4 → 45°, 1 → 0° */
-  const angles = [180, 135, 90, 45, 0];
-  const idx = Math.max(0, FUEL.indexOf(level || ""));
-  const angDeg = angles[idx];
-  const angRad = (angDeg * Math.PI) / 180;
-  const cx = 120, cy = 56, r = 96;
-  const needleLen = 62;
-  const nx = +(cx - needleLen * Math.cos(angRad)).toFixed(1);
-  const ny = +(cy - needleLen * Math.sin(angRad)).toFixed(1);
-
-  /* tirets aux positions 1/4, 1/2, 3/4 */
-  const ticks = [135, 90, 45].map((deg) => {
-    const a = (deg * Math.PI) / 180;
-    const len = deg === 90 ? 14 : 10;
-    return `<line x1="${+(cx - r * Math.cos(a)).toFixed(1)}" y1="${+(cy - r * Math.sin(a)).toFixed(1)}"
-        x2="${+(cx - (r - len) * Math.cos(a)).toFixed(1)}" y2="${+(cy - (r - len) * Math.sin(a)).toFixed(1)}"
-        stroke="#111" stroke-width="${deg === 90 ? 1.6 : 1.2}"/>`;
-  }).join("\n  ");
-
-  return `<svg viewBox="0 0 240 65" class="ct-gauge" aria-hidden="true">
-  <path d="M24 56 A96 96 0 0 1 216 56" fill="none" stroke="#111" stroke-width="1.6"/>
-  <line x1="24"  y1="56" x2="54"  y2="56" stroke="#111" stroke-width="1.6"/>
-  <line x1="216" y1="56" x2="186" y2="56" stroke="#111" stroke-width="1.6"/>
-  ${ticks}
-  <line x1="${cx}" y1="${cy}" x2="${nx}" y2="${ny}" stroke="#111" stroke-width="2.2"/>
-  <circle cx="${cx}" cy="${cy}" r="4.5" fill="#111"/>
-</svg>`;
-}
-
-function gaugeWith(level) {
-  const idx = Math.max(0, FUEL.indexOf(level || ""));
-  const marks = FUEL.map((l, i) => {
-    const cls = i === idx ? "on" : "";
-    return `<span class="ct-fuel__mark ${cls}">${l}</span>`;
-  }).join("");
-  return `<div class="ct-gauge-wrap2">
-    ${fuelGaugeSvg(level)}
-    <div class="ct-fuel">${marks}</div>
-  </div>`;
-}
 
 function driverBox(title, drv) {
   const rows = [
@@ -152,7 +64,7 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
   .ct-page{width:auto;min-height:0;margin:0;padding:0;box-shadow:none;page-break-after:always;break-after:page}
   .ct-page:last-child{page-break-after:auto;break-after:auto}
   .ct-page::before{display:none}
-  .ct-box,.ct-row,.ct-sign,.ct-note,.ct-check,.ct-equip,.ct-articles h3{break-inside:avoid;page-break-inside:avoid}
+  .ct-box,.ct-row,.ct-sign,.ct-note,.ct-check,.ct-articles h3{break-inside:avoid;page-break-inside:avoid}
 }
 .ct-page + .ct-page{border-top:6px solid #111}
 @media print{.ct-page + .ct-page{padding-top:5mm}}
@@ -162,12 +74,11 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 .ct-head__mid{text-align:center;width:130px}
 .ct-head__right{flex:1;text-align:right;font-size:8pt;line-height:1.5}
 .ct-title{font-weight:700;font-size:10.5pt}
-.ct-number{border:1.4px solid #111;border-radius:3px;padding:5px 10px;font-weight:700;
+.ct-number{border:1.4px solid #111;border-radius:6px;padding:5px 10px;font-weight:700;
   font-size:13pt;text-align:center;letter-spacing:.5px;margin-top:3px}
 .ct-brand{font-weight:800;font-size:12pt;letter-spacing:.2px;margin-top:1px}
-.ct-logo{display:block;position:relative;width:75px;height:53px;overflow:hidden;margin:0 auto 2px}
-.ct-logo img{position:absolute;left:50%;top:47.5%;width:115px;height:115px;
-  transform:translate(-50%,-50%)}
+.ct-logo{display:block;position:relative;width:95px;height:53px;overflow:hidden;margin:0 auto 2px}
+.ct-logo img{max-height:53px;max-width:100%;object-fit:contain;display:inline-block}
 
 .ct-box{border:1.4px solid #111;border-radius:4px;padding:5px 7px;margin-bottom:6px}
 .ct-box__title{text-align:center;font-weight:700;background:#ececec;border-radius:2px;
@@ -181,56 +92,32 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 .ct-row--2{grid-template-columns:1fr 1fr}
 .ct-row--main{grid-template-columns:1.15fr .85fr}
 
-.ct-cars{display:flex;gap:10px;justify-content:space-around;margin:4px 0}
-.ct-cars figure{margin:0;text-align:center}
-.ct-cars figcaption{font-weight:700;font-size:9.4pt;margin-bottom:2px}
-.ct-car{width:100%;max-width:190px;height:auto}
+/* Illustration état des lieux véhicule et carburant */
+.ct-diagram-img{width:100%;max-width:330px;height:auto;display:block;margin:0 auto}
 
-/* Jauge */
-.ct-gauge-wrap2{text-align:center;margin:4px 0 0}
-.ct-gauge{width:100%;max-width:230px;height:auto;display:block;margin:0 auto}
-.ct-fuel{display:flex;justify-content:space-between;font-size:8.4pt;font-weight:700;
-  margin-top:2px;padding:0 8px}
-.ct-fuel__mark{opacity:.32}
-.ct-fuel__mark.on{opacity:1;text-decoration:underline}
-
-.ct-gauge-row{display:flex;gap:8px;align-items:flex-end;margin-top:2px}
-.ct-equip{flex:0 0 auto;width:118px;font-size:8pt;border:1px solid #111;border-radius:3px;
-  padding:4px 6px;background:#fafafa}
-.ct-equip b{display:block;margin-bottom:2px}
-.ct-equip ul{list-style:none;display:grid;gap:1px}
-.ct-equip li{display:flex;justify-content:space-between;gap:6px}
 .ct-check{display:grid;grid-template-columns:1fr 1fr;gap:2px 10px;font-size:9pt;margin:5px 0 2px}
 .ct-check label{display:flex;align-items:center;gap:6px}
-.ct-boxed{border:1px solid #999;font-weight:700;min-width:11px;height:11px;text-align:center;
-  line-height:11px;font-size:8.4pt}
+.ct-boxed{border:1px solid #999;font-weight:700;min-width:13px;height:13px;text-align:center;
+  line-height:13px;font-size:9pt;display:inline-block;border-radius:2px}
 .ct-boxed.on{background:#111;color:#fff}
 .ct-note{font-size:7.4pt;line-height:1.35;font-weight:700;padding:4px 6px;margin-bottom:0}
 .ct-accept{font-size:8.4pt;margin-top:6px}
 
-/* --- Signature plus grande --- */
+/* Signature & Cachet */
 .ct-sign{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-top:8px}
 .ct-sign div{font-size:9pt}
 .ct-sign b{display:block;text-align:right;font-size:8.4pt}
-.ct-sign .line{margin-top:52px;border-top:1px solid #111}
-.ct-sign .stamp{width:236px;margin-top:8px;border:0;display:grid;gap:0;text-align:center;
-  color:#12286f;font-style:italic;line-height:1.25;font-size:8.6pt;letter-spacing:.02em}
-.ct-sign .stamp b{font-size:13pt;font-weight:800;text-align:center;letter-spacing:.01em}
-.ct-sign .stamp span{display:block;font-weight:600}
-.ct-sign .stamp span:nth-child(2){font-size:8.6pt}
-.ct-signature{margin-top:6px}
-.ct-signature img{display:inline-block;max-width:250px;max-height:65px;object-fit:contain;
+.ct-sign .line{margin-top:40px;border-top:1px solid #111}
+.ct-stamp{display:block;max-width:240px;max-height:90px;object-fit:contain;margin-top:4px}
+.ct-signature{margin-top:4px}
+.ct-signature img{display:inline-block;max-width:280px;max-height:85px;object-fit:contain;
   vertical-align:middle}
 .ct-signature span{display:block;font-size:7.4pt;color:#333;margin-top:2px}
 .ct-signature--remote span::after{content:" (signature électronique)"}
 
-/* Photo du véhicule dans l'en-tête */
-.ct-veh-photo{text-align:center;margin:3px 0 1px}
-.ct-veh-photo img{max-width:110px;max-height:36px;object-fit:contain;border-radius:3px}
-
 .ct-foot{margin-top:8px;font-size:8pt;font-weight:700;text-align:center}
 
-/* Page 1 : compactage pour tenir sur une seule page A4 */
+/* Page 1 compactée pour tenir exactement sur A4 */
 .ct-p1{font-size:8.2pt;line-height:1.28}
 .ct-p1 .ct-box{padding:3px 5px;margin-bottom:4px}
 .ct-p1 .ct-box__title{margin-bottom:2px;padding:0;font-size:8.6pt}
@@ -241,27 +128,16 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 .ct-p1 .ct-number{padding:3px 8px;font-size:11.5pt;margin-top:2px}
 .ct-p1 .ct-brand{font-size:9.6pt}
 .ct-p1 .ct-head__right{font-size:7.2pt;line-height:1.4}
-.ct-p1 .ct-cars{gap:8px;margin:2px 0}
-.ct-p1 .ct-cars figcaption{font-size:8.4pt;margin-bottom:1px}
-.ct-p1 .ct-car{max-width:140px}
-.ct-p1 .ct-gauge{max-width:100%;margin:1px auto}
-.ct-p1 .ct-fuel{margin-top:2px;font-size:7.6pt;padding:0 4px}
-.ct-p1 .ct-equip{font-size:7.2pt;padding:3px 5px;line-height:1.3;width:104px}
-.ct-p1 .ct-gauge-row{gap:6px}
 .ct-p1 .ct-check{font-size:8.2pt;margin:4px 0 2px;gap:2px 8px}
 .ct-p1 .ct-note{font-size:6.9pt;padding:3px 5px;margin-top:4px;line-height:1.32}
 .ct-p1 .ct-accept{font-size:7.8pt;margin-top:4px}
 .ct-p1 .ct-sign{margin-top:5px;gap:16px}
-.ct-p1 .ct-sign .line{margin-top:32px}
-.ct-p1 .ct-signature{margin-top:4px}
-.ct-p1 .ct-signature img{max-width:260px;max-height:68px}
+.ct-p1 .ct-sign .line{margin-top:28px}
+.ct-p1 .ct-stamp{max-width:230px;max-height:80px}
+.ct-p1 .ct-signature img{max-width:280px;max-height:85px}
 .ct-p1 .ct-signature span{font-size:7pt}
-.ct-p1 .ct-sign--signed .line{margin-top:14px}
-.ct-p1 .stamp{width:262px;font-size:8pt;margin-top:5px}
-.ct-p1 .stamp b{font-size:11.5pt}
+.ct-p1 .ct-sign--signed .line{margin-top:8px}
 .ct-p1 .ct-foot{margin-top:4px;font-size:7.6pt}
-.ct-p1 .ct-gauge-wrap2{margin:2px 0 0}
-.ct-p1 .ct-veh-photo img{max-width:100px;max-height:28px}
 
 .ct-articles{column-count:2;column-gap:8mm;font-size:7.5pt;line-height:1.36}
 .ct-articles h3{font-size:8pt;font-weight:700;margin:0 0 1px;break-after:avoid}
@@ -279,8 +155,7 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 @media print{ .ct-bar{display:none!important} }
 `;
 
-/* ------------------------------------------------------------- page 1 */
-/** Signature client : image + mention de qui a signé, quand elle existe. */
+/* --------------------------------------------------------- page 1 */
 function signatureBlock(r) {
   if (!r.signatureData) return "";
   const who = r.signatureName ? ` — ${r.signatureName}` : "";
@@ -288,16 +163,6 @@ function signatureBlock(r) {
       <img src="${esc(r.signatureData)}" alt="Signature du client">
       <span>Signé le ${fmtDate(r.signatureSignedAt)}${esc(who)}</span>
     </div>`;
-}
-
-/** Photo principale du véhicule (premier élément de gallery), si disponible. */
-function vehiclePhotoBlock(vehicle) {
-  if (!vehicle) return "";
-  const gallery = vehicle.gallery;
-  if (!Array.isArray(gallery) || !gallery[0]) return "";
-  const src = String(gallery[0]).trim();
-  if (!src) return "";
-  return `<div class="ct-veh-photo"><img src="${esc(src)}" alt="Photo du véhicule" crossorigin="anonymous"></div>`;
 }
 
 function page1(r, vehicle) {
@@ -325,9 +190,7 @@ function page1(r, vehicle) {
     cin: r.driver2_cin, cin_date: r.driver2_cin_date,
   };
 
-  const equip = EQUIPMENT_LABELS.map(
-    ([k, label]) => `<li><span>${label}</span><b>${r.equipment[k] ? "✓" : ""}</b></li>`
-  ).join("");
+  const carImgSrc = COMPANY.carDiagram || "";
 
   return `<section class="ct-page ct-p1" data-n="1 / 2">
     <header class="ct-head">
@@ -338,7 +201,6 @@ function page1(r, vehicle) {
       <div class="ct-head__mid">
         ${logoSvg()}
         <div class="ct-brand">${esc(COMPANY.legalName)}</div>
-        ${vehiclePhotoBlock(vehicle)}
       </div>
       <div class="ct-head__right">
         <div>Tél: ${esc(COMPANY.phone)}</div>
@@ -359,19 +221,8 @@ function page1(r, vehicle) {
 
     <div class="ct-row ct-row--main">
       <div>
-        <div class="ct-box">
-          <div class="ct-cars">
-            <figure><figcaption>DEPART</figcaption>${CAR_TOP_VIEW}</figure>
-            <figure><figcaption>RETOUR</figcaption>${CAR_TOP_VIEW}</figure>
-          </div>
-          <div class="ct-gauge-row">
-            <div style="flex:1;min-width:0">
-              ${gaugeWith(r.fuel_depart)}
-            </div>
-            <div class="ct-equip">
-              <ul>${equip}</ul>
-            </div>
-          </div>
+        <div class="ct-box" style="padding:3px;text-align:center">
+          ${carImgSrc ? `<img src="${carImgSrc}" class="ct-diagram-img" alt="État des lieux - Véhicule et Carburant">` : ""}
         </div>
         <div class="ct-box">
           ${line("Kms départ :", r.kms_depart ? nf(r.kms_depart) + " kms" : "")}
@@ -379,7 +230,7 @@ function page1(r, vehicle) {
           ${line("Km parcourus :", r.kmDone ? nf(r.kmDone) + " kms" : "")}
         </div>
         <div class="ct-check">
-          ${options.map(([label, on]) => `<label><span class="ct-boxed ${on ? "on" : ""}">${on ? "X" : ""}</span> ${label}</label>`).join("")}
+          ${options.map(([label, on]) => `<label><span class="ct-boxed ${on ? "on" : ""}">${on ? "✓" : ""}</span> ${label}</label>`).join("")}
         </div>
       </div>
 
@@ -403,8 +254,8 @@ function page1(r, vehicle) {
           ${line("Mode de paiement :", r.paymentModeLabel)}
         </div>
         <div class="ct-box ct-note">
-          - Je reconnais être seul responsable des violations du code de la route.<br>
-          - J'autorise ${esc(COMPANY.legalName)} à débiter de mon compte bancaire via ma carte,
+          - Je reconnais être seul responsable des violations du code de la route. -<br>
+          J'autorise Leegend cars à débiter de mon compte bancaire via ma carte,
           les montants relatifs aux dégâts et frais causés au véhicule.
         </div>
       </div>
@@ -415,11 +266,8 @@ function page1(r, vehicle) {
     <div class="ct-sign${r.signatureData ? " ct-sign--signed" : ""}">
       <div>
         Agent Loueur<br><b>Fait le: ${fmtIsoDate(r.created_at)}</b>
-        <div class="stamp">
-          <b>${esc(COMPANY.stamp.name)}</b>
-          <span>${esc(COMPANY.stamp.activity)}</span>
-          <span>${esc(COMPANY.addressOneLine)}</span>
-          <span>Tél : ${esc(COMPANY.stampPhone)}</span>
+        <div class="ct-stamp-wrap">
+          <img src="${COMPANY.stampImg}" class="ct-stamp" alt="Cachet et signature de l'agence">
         </div>
       </div>
       <div style="text-align:right">
@@ -432,10 +280,7 @@ function page1(r, vehicle) {
   </section>`;
 }
 
-/* ------------------------------------------------------------- page 2 */
-/* =========================================================================
-   ⚠  À RELIRE SUR LE PDF D'ORIGINE AVANT UTILISATION CONTRATUELLE
-   ========================================================================= */
+/* --------------------------------------------------------- page 2 */
 const ARTICLES = [
   ["ARTICLE 1 : UTILISATION DU VEHICULE", [
     "a- La location est personnelle : elle n'est en aucun cas transmissible, sauf les personnes agréées par la société de location qui ont le droit d'utilisation du véhicule loué.",
@@ -474,7 +319,7 @@ const ARTICLES = [
     "6- Le locataire subroge l'office la société de location dans ses droits pour recours contre les tiers pour dégâts matériels.",
     "7- L'indemnité éventuellement obtenue sert d'abord au remboursement des dégâts matériels et des frais ayant pu rester à la charge du locataire ; le solde lui revient.",
     "8- Les assurances ci-dessus ne sont en vigueur que pour la durée de la location.",
-    "9- Tout conducteur en état d'ivresse ou sous l'empire d'un état alcoolique, Tornis par les rapports des autorités, devient seul et unique responsable des dommages causés.",
+    "9- Tout conducteur en état d'ivresse ou sous l'empire d'un état alcoolique devient seul et unique responsable des dommages causés.",
     "10- Le locataire s'engage à déclarer à la société de location, sous 48 heures, immédiatement aux autorités tout accident, vol ou incendie, même partiel. Sa déclaration devra comporter obligatoirement les circonstances, le lieu, l'heure, le nom et l'adresse des témoins, ainsi que le numéro du P.V. des autorités.",
     "11- En aucun cas le locataire ne devra discuter de la responsabilité, ni transiger avec des tiers relativement à l'accident.",
   ]],
@@ -521,7 +366,7 @@ function page2(r) {
   </section>`;
 }
 
-/* ------------------------------------------------------------- document */
+/* --------------------------------------------------------- document */
 export function contractHtml(r, vehicle, opts = {}) {
   const toolbar = opts.toolbar === false ? "" : `<div class="ct-bar">
     <button type="button" data-print>Enregistrer en PDF</button>
