@@ -88,6 +88,7 @@ check("mode « supabase »", w.LCAdmin?.mode === "supabase", w.LCAdmin?.mode);
 /* Déclaré hors du bloc d'essai : le finally doit pouvoir nettoyer même si le
    test échoue avant la création du véhicule de travail. */
 let voitureCreee = null;
+let nomPieceTest = "";
 
 try {
   /* Connexion : elle seule passe par l'adaptateur (le serveur a son ancien
@@ -151,6 +152,28 @@ try {
 
   if (creation.ok) {
     const id = creation.reservation.id;
+
+    /* La suppression des pièces jointes passe par cette route Netlify avant
+       d'appeler le stockage. Vérifier la vraie requête évite qu'une route
+       invalide laisse silencieusement les pièces visibles. */
+    const pngTest = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";
+    const ajoutPiece = await w.eval(
+      `window.LCAdmin.api("/api/admin/reservations/${id}/attachments", { method: "POST", body: { kind: "piece", name: "Test suppression", files: [${JSON.stringify(pngTest)}] } })`,
+    );
+    const pieceTest = ajoutPiece?.attachments?.[0];
+    nomPieceTest = pieceTest?.stored_name || "";
+    check("pièce jointe de test téléversée", !!pieceTest?.id && !!nomPieceTest);
+    if (pieceTest?.id) {
+      let erreurSuppressionPiece = "";
+      try {
+        await w.eval(`window.LCAdmin.api("/api/admin/attachments/${pieceTest.id}", { method: "DELETE" })`);
+      } catch (e) {
+        erreurSuppressionPiece = e.message;
+      }
+      const dossierApresSuppression = await w.eval(`window.LCAdmin.api("/api/admin/reservations/${id}")`);
+      check("suppression d'une pièce via l'adaptateur", !dossierApresSuppression.reservation.attachments.some((a) => a.id === pieceTest.id), erreurSuppressionPiece);
+    }
+
     /* Un règlement : le dossier doit exposer « payments » et « totalPaid ». */
     await fetch(`${B}/api/admin/reservations/${id}/payments`, {
       method: "POST",
@@ -267,6 +290,12 @@ try {
      milieu laisserait sinon une voiture « Saisie <date> » dans la base de
      l'agence, et les suites suivantes échoueraient sur un parc non vide. */
   const jeton = { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: "Bearer " + process.env.SUPABASE_SERVICE_ROLE_KEY, "Content-Type": "application/json" };
+  if (nomPieceTest) {
+    await fetch(
+      `${process.env.SUPABASE_URL}/storage/v1/object/uploads/uploads/reservations/${encodeURIComponent(nomPieceTest)}`,
+      { method: "DELETE", headers: jeton },
+    ).catch(() => {});
+  }
   await fetch(`${process.env.SUPABASE_URL}/rest/v1/vehicles?slug=like.saisie-*`, { method: "DELETE", headers: jeton }).catch(() => {});
   await fetch(`${process.env.SUPABASE_URL}/rest/v1/vehicles?slug=like.adaptateur-*`, { method: "DELETE", headers: jeton }).catch(() => {});
   if (voitureCreee) {
