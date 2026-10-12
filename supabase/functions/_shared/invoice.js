@@ -111,7 +111,6 @@ function head(r) {
     <div class="fv-head__right">
       <div>Tél: ${esc(COMPANY.phone)}</div>
       <div>Email: ${esc(COMPANY.email)}</div>
-      ${COMPANY.addressLines.map((l) => `<div>${esc(l)}</div>`).join("")}
     </div>
   </header>`;
 }
@@ -199,10 +198,7 @@ function document_(r, vehicle) {
     <div class="fv-sign">
       <div>Signature du client<div class="line"></div></div>
       <div>
-        Cachet et signature — ${esc(COMPANY.legalName)}
-        <div style="margin-top:4px">
-          <img src="${COMPANY.stampImg}" alt="Cachet et signature" style="max-height:85px;max-width:240px;object-fit:contain;display:block">
-        </div>
+        Cachet et signature de l'agence<div class="line"></div>
       </div>
     </div>
 
