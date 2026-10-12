@@ -1927,8 +1927,6 @@
 
       <div class="row" style="margin-top:16px">
         <button type="button" class="primary" id="save">Enregistrer</button>
-        <label class="chk"><input type="checkbox" id="f-active" ${v.active ? "checked" : ""}> Visible sur le site</label>
-        <label class="chk"><input type="checkbox" id="f-service" ${v.en_service ? "checked" : ""}> En service</label>
       </div>
     </div>`
     );
@@ -2017,8 +2015,8 @@
         description: lines("#f-desc"),
         ideal_for: lines("#f-ideal"),
         tiers,
-        active: $("#f-active").checked,
-        en_service: $("#f-service").checked,
+        active: !!v.active,
+        en_service: !!v.en_service,
         keepPhotos: photos,
         removePhotos: removed,
         photos: previews,
