@@ -206,6 +206,7 @@ function page1(r, vehicle) {
       <div class="ct-head__right">
         <div>Tél: ${esc(COMPANY.phone)}</div>
         <div>Email: ${esc(COMPANY.email)}</div>
+        ${COMPANY.addressLines.map((l) => `<div>${esc(l)}</div>`).join("")}
       </div>
     </header>
 
@@ -266,6 +267,9 @@ function page1(r, vehicle) {
     <div class="ct-sign${r.signatureData ? " ct-sign--signed" : ""}">
       <div>
         Agent Loueur<br><b>Fait le: ${fmtIsoDate(r.created_at)}</b>
+        <div class="ct-stamp-wrap">
+          <img src="${COMPANY.stampImg}" class="ct-stamp" alt="Cachet et signature de l'agence">
+        </div>
       </div>
       <div style="text-align:right">
         Conducteurs
