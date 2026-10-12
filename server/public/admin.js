@@ -1060,7 +1060,7 @@
           <h2 style="margin-top:0">${isContract ? "Contrat de location" : "Facture"}</h2>
           <div class="faint">${
             isContract
-              ? "Document généré à partir du dossier — format du modèle Luxe Rif Car, 2 pages, prêt à imprimer en PDF."
+              ? "Document généré à partir du dossier — format du modèle Leegend Cars, 2 pages, prêt à imprimer en PDF."
               : "Document généré à partir du dossier et des règlements enregistrés, prêt à imprimer en PDF."
           }</div>
         </div>
@@ -1103,7 +1103,7 @@
       }
       <div class="doc">
         <div class="doc__head">
-          <div><b>LUXE RIF CAR</b><div class="faint">${dl("79 Rue Al Yemen, Tangier 90060")}</div></div>
+          <div><b>Leegend Cars</b><div class="faint">${dl("10 Rue ouarzazat hassan Rabat 90000")}</div></div>
           <div style="text-align:right">
             <b>${isContract ? "Contrat de location" : "Facture"}</b>
             <div class="faint">n° ${dl(docNumber)}</div>
@@ -1146,10 +1146,6 @@
                  </table>
                </div>`
         }
-        <div class="doc__sign">
-          <div>Signature du client<div class="sign"></div></div>
-          <div>Pour Luxe Rif Car<div class="sign"></div></div>
-        </div>
       </div>
     </div>`;
   }
