@@ -89,7 +89,6 @@ const adminShell = () => `<!doctype html>
     <a data-tab="cli"><span class="ic">☺</span> Clients</a>
     <div class="side__group"> exploitation</div>
     <a data-tab="veh"><span class="ic">▣</span> Flotte</a>
-    <a data-tab="avail"><span class="ic">⊘</span> Indisponibilités</a>
     <a data-tab="mnt"><span class="ic">✚</span> Maintenance</a>
     <div class="side__group">Compte</div>
     <a data-tab="set"><span class="ic">⚙</span> Réglages</a>
