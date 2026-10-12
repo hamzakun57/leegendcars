@@ -119,26 +119,26 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 .ct-foot{margin-top:8px;font-size:8pt;font-weight:700;text-align:center}
 
 /* Page 1 uses the available A4 space for more legible contract details. */
-.ct-p1{display:flex;flex-direction:column;font-size:9pt;line-height:1.35}
-.ct-p1 .ct-box{padding:4px 6px;margin-bottom:5px}
-.ct-p1 .ct-box__title{margin-bottom:3px;padding:0;font-size:9.2pt}
-.ct-p1 .ct-line{font-size:8.8pt}
-.ct-p1 .ct-line b{padding-bottom:1px}
-.ct-p1 .ct-row{gap:6px}
-.ct-p1 .ct-head{margin-bottom:4px}
+.ct-p1{display:flex;flex-direction:column;font-size:10pt;line-height:1.42}
+.ct-p1 .ct-box{padding:5px 7px;margin-bottom:6px}
+.ct-p1 .ct-box__title{margin-bottom:4px;padding:1px 0;font-size:10pt}
+.ct-p1 .ct-line{font-size:9.6pt}
+.ct-p1 .ct-line b{padding-bottom:2px}
+.ct-p1 .ct-row{gap:7px}
+.ct-p1 .ct-head{margin-bottom:6px}
 .ct-p1 .ct-number{padding:3px 8px;font-size:11.5pt;margin-top:2px}
-.ct-p1 .ct-brand{font-size:10.2pt}
-.ct-p1 .ct-head__right{font-size:7.8pt;line-height:1.45}
-.ct-p1 .ct-check{font-size:8.8pt;margin:5px 0 3px;gap:3px 8px}
-.ct-p1 .ct-note{font-size:7.5pt;padding:4px 6px;margin-top:5px;line-height:1.38}
-.ct-p1 .ct-accept{font-size:8.5pt;margin-top:5px}
+.ct-p1 .ct-brand{font-size:11pt}
+.ct-p1 .ct-head__right{font-size:8.5pt;line-height:1.5}
+.ct-p1 .ct-check{font-size:9.6pt;margin:6px 0 4px;gap:4px 9px}
+.ct-p1 .ct-note{font-size:8pt;padding:5px 7px;margin-top:6px;line-height:1.42}
+.ct-p1 .ct-accept{font-size:9.2pt;margin-top:6px}
 .ct-p1 .ct-sign{margin-top:auto;gap:16px}
 .ct-p1 .ct-sign .line{margin-top:32px}
 .ct-p1 .ct-stamp{max-width:230px;max-height:80px}
 .ct-p1 .ct-signature img{max-width:280px;max-height:85px}
-.ct-p1 .ct-signature span{font-size:7.6pt}
+.ct-p1 .ct-signature span{font-size:8pt}
 .ct-p1 .ct-sign--signed .line{margin-top:8px}
-.ct-p1 .ct-foot{margin-top:4px;font-size:8.2pt}
+.ct-p1 .ct-foot{margin-top:5px;font-size:8.6pt}
 
 .ct-articles{column-count:2;column-gap:8mm;font-size:7.5pt;line-height:1.36}
 .ct-articles h3{font-size:8pt;font-weight:700;margin:0 0 1px;break-after:avoid}
