@@ -26,8 +26,8 @@ export const COMPANY = {
   logoHeight: 53,
 };
 
-export function logoSvg(height = COMPANY.logoHeight) {
-  return `<span class="ct-logo" style="display:block;width:95px;height:${height}px;margin:0 auto 2px;text-align:center">
+export function logoSvg(height = COMPANY.logoHeight, width = 95) {
+  return `<span class="ct-logo" style="display:block;width:${width}px;height:${height}px;margin:0 auto 2px;text-align:center">
       <img src="${COMPANY.logo}" alt="${COMPANY.logoWord}" style="max-height:${height}px;max-width:100%;object-fit:contain;display:inline-block">
     </span>`;
 }

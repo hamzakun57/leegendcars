@@ -62,6 +62,7 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 @media print{
   body{background:#fff}
   .ct-page{width:auto;min-height:0;margin:0;padding:0;box-shadow:none;page-break-after:always;break-after:page}
+  .ct-p1{min-height:281mm}
   .ct-page:last-child{page-break-after:auto;break-after:auto}
   .ct-page::before{display:none}
   .ct-box,.ct-row,.ct-sign,.ct-note,.ct-check,.ct-articles h3{break-inside:avoid;page-break-inside:avoid}
@@ -118,7 +119,7 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 .ct-foot{margin-top:8px;font-size:8pt;font-weight:700;text-align:center}
 
 /* Page 1 compactée pour tenir exactement sur A4 */
-.ct-p1{font-size:8.2pt;line-height:1.28}
+.ct-p1{display:flex;flex-direction:column;font-size:8.2pt;line-height:1.28}
 .ct-p1 .ct-box{padding:3px 5px;margin-bottom:4px}
 .ct-p1 .ct-box__title{margin-bottom:2px;padding:0;font-size:8.6pt}
 .ct-p1 .ct-line{font-size:8pt}
@@ -131,7 +132,7 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 .ct-p1 .ct-check{font-size:8.2pt;margin:4px 0 2px;gap:2px 8px}
 .ct-p1 .ct-note{font-size:6.9pt;padding:3px 5px;margin-top:4px;line-height:1.32}
 .ct-p1 .ct-accept{font-size:7.8pt;margin-top:4px}
-.ct-p1 .ct-sign{margin-top:5px;gap:16px}
+.ct-p1 .ct-sign{margin-top:auto;gap:16px}
 .ct-p1 .ct-sign .line{margin-top:28px}
 .ct-p1 .ct-stamp{max-width:230px;max-height:80px}
 .ct-p1 .ct-signature img{max-width:280px;max-height:85px}
@@ -199,7 +200,7 @@ function page1(r, vehicle) {
         <div class="ct-number">${esc(r.contractNumber)}</div>
       </div>
       <div class="ct-head__mid">
-        ${logoSvg()}
+        ${logoSvg(64, 115)}
         <div class="ct-brand">${esc(COMPANY.legalName)}</div>
       </div>
       <div class="ct-head__right">
