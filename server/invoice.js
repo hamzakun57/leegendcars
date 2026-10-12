@@ -49,8 +49,8 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 .fv-head__left{flex:1}
 .fv-head__mid{text-align:center;width:150px}
 .fv-head__right{flex:1;text-align:right;font-size:8pt;line-height:1.5}
-.ct-logo{display:block;position:relative;width:140px;height:80px;overflow:hidden;margin:0 auto 2px}
-.ct-logo img{max-height:80px;max-width:100%;object-fit:contain;display:inline-block}
+.ct-logo{display:block;position:relative;width:140px;height:105px;overflow:hidden;margin:0 auto 2px}
+.ct-logo img{display:block}
 .fv-title{font-weight:700;font-size:14pt;letter-spacing:.06em}
 .fv-number{margin-top:3px;border:1.5px solid #111;border-radius:3px;padding:6px 10px;
   font-weight:700;font-size:12pt;letter-spacing:.12em;display:inline-block;min-width:190px;text-align:center}
@@ -106,7 +106,7 @@ function head(r) {
       </div>
     </div>
     <div class="fv-head__mid">
-      ${logoSvg(80, 140)}
+      ${logoSvg(105, 140)}
     </div>
     <div class="fv-head__right">
       <div>Tél: ${esc(COMPANY.phone)}</div>

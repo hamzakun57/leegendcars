@@ -78,8 +78,8 @@ body{font-family:"DejaVu Sans",Arial,Helvetica,sans-serif;color:#111;background:
 .ct-number{border:1.4px solid #111;border-radius:6px;padding:5px 10px;font-weight:700;
   font-size:13pt;text-align:center;letter-spacing:.5px;margin-top:3px}
 .ct-brand{font-weight:800;font-size:12pt;letter-spacing:.2px;margin-top:1px}
-.ct-logo{display:block;position:relative;width:95px;height:53px;overflow:hidden;margin:0 auto 2px}
-.ct-logo img{max-height:80px;max-width:100%;object-fit:contain;display:inline-block}
+.ct-logo{display:block;position:relative;width:140px;height:105px;overflow:hidden;margin:0 auto 2px}
+.ct-logo img{display:block}
 
 .ct-box{border:1.4px solid #111;border-radius:4px;padding:5px 7px;margin-bottom:6px}
 .ct-box__title{text-align:center;font-weight:700;background:#ececec;border-radius:2px;
@@ -200,7 +200,7 @@ function page1(r, vehicle) {
         <div class="ct-number">${esc(r.contractNumber)}</div>
       </div>
       <div class="ct-head__mid">
-        ${logoSvg(80, 140)}
+        ${logoSvg(105, 140)}
         <div class="ct-brand">${esc(COMPANY.legalName)}</div>
       </div>
       <div class="ct-head__right">
