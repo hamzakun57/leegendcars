@@ -1013,10 +1013,15 @@
 
   function subPieces() {
     const r = DOSSIER;
+    const useSignedAttachmentUrls = window.LCAdmin?.mode === "supabase";
     const rows = r.attachments.length
       ? r.attachments.map((a) => `<tr>
           <td>${esc(KIND_LABEL[a.kind] || a.kind)}</td>
-          <td><a href="/uploads/reservations/${esc(a.stored_name)}" target="_blank">${esc(a.original_name)}</a></td>
+          <td>${
+            useSignedAttachmentUrls
+              ? `<button type="button" data-att-open="${a.id}">${esc(a.original_name)}</button>`
+              : `<a href="/uploads/reservations/${esc(a.stored_name)}" target="_blank" rel="noopener">${esc(a.original_name)}</a>`
+          }</td>
           <td class="faint">${esc(a.mime)}</td>
           <td>${(a.size / 1024).toFixed(0)} Ko</td>
           <td class="faint">${esc(dt(a.created_at))}</td>
@@ -1456,6 +1461,20 @@
         await api("/api/admin/attachments/" + b.dataset.attDel, { method: "DELETE" });
         const fresh = (await api("/api/admin/reservations/" + r.id)).reservation;
         await reload(fresh);
+      })
+    );
+    $$("#dos-body [data-att-open]").forEach((b) =>
+      b.addEventListener("click", async () => {
+        const win = window.open("", "_blank");
+        try {
+          const { url } = await api(`/api/admin/attachments/${b.dataset.attOpen}/view`);
+          if (!url) throw new Error("Impossible d'ouvrir cette pièce jointe.");
+          if (win) win.location.href = url;
+          else window.open(url, "_blank");
+        } catch (e) {
+          if (win) win.close();
+          flash(e.message || "Erreur lors de l'ouverture de la pièce jointe.", "err");
+        }
       })
     );
 

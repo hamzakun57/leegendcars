@@ -695,6 +695,15 @@
     }
 
     /* ---------------- pièces jointes & documents ---------------- */
+    if (seg[2] === "attachments" && seg.length === 5 && seg[4] === "view" && methode === "GET") {
+      const id = Number(seg[3]);
+      if (!Number.isSafeInteger(id) || id < 1) throw new Error("Pièce jointe introuvable");
+      const { data, error } = await c.from("attachments").select("stored_name").eq("id", id).maybeSingle();
+      if (error) return surErreur(error);
+      if (!data) throw new Error("Pièce jointe introuvable");
+      return appelerFonction("upload", { action: "signed-url", stored_name: data.stored_name }, 20000);
+    }
+
     if (seg[3] === "attachments" && methode === "DELETE") {
       const { data, error } = await c.from("attachments").delete().eq("id", seg[4]).select("stored_name").maybeSingle();
       if (error) return surErreur(error);
