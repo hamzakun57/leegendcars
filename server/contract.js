@@ -204,7 +204,7 @@ function page1(r, vehicle) {
         <div class="ct-brand">${esc(COMPANY.legalName)}</div>
       </div>
       <div class="ct-head__right">
-        <div>LUXE RIF CAR</div>
+        <div>Leegend Cars</div>
         <div>10 Rue Ouarzazat Hassan, Rabat 90000</div>
         <div>Tél: ${esc(COMPANY.phone)}</div>
         <div>Email: ${esc(COMPANY.email)}</div>
@@ -257,7 +257,7 @@ function page1(r, vehicle) {
         </div>
         <div class="ct-box ct-note">
           - Je reconnais être seul responsable des violations du code de la route. -<br>
-          J'autorise Leegend cars à débiter de mon compte bancaire via ma carte,
+          J'autorise Leegend Cars à débiter de mon compte bancaire via ma carte,
           les montants relatifs aux dégâts et frais causés au véhicule.
         </div>
       </div>

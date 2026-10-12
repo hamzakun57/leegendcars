@@ -705,10 +705,12 @@
     }
 
     if (seg[3] === "attachments" && methode === "DELETE") {
-      const { data, error } = await c.from("attachments").delete().eq("id", seg[4]).select("stored_name").maybeSingle();
+      const { data, error } = await c.from("attachments").select("stored_name").eq("id", seg[4]).maybeSingle();
       if (error) return surErreur(error);
       if (!data) throw new Error("Pièce jointe introuvable");
-      await supprimerFichier(data.stored_name);
+      await appelerFonction("upload", { action: "delete", stored_name: data.stored_name }, 20000);
+      const { error: erreurSuppression } = await c.from("attachments").delete().eq("id", seg[4]);
+      if (erreurSuppression) return surErreur(erreurSuppression);
       return { ok: true };
     }
 

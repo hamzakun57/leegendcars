@@ -41,29 +41,38 @@ Deno.serve((requete) =>
       /* Deux emplacements possibles, tous deux contraints : la photo de flotte
          dans le bucket public, la pièce de dossier dans le bucket privé. */
       const nomFichier = cle.split("/").pop() as string;
-      const cibles = [
-        { bucket: BUCKET_PHOTOS, cle: `${BUCKET_PHOTOS}/${nomFichier}` },
-        { bucket: BUCKET, cle: `${BUCKET}/${nomFichier}` },
-        { bucket: BUCKET, cle: `${BUCKET}/reservations/${nomFichier}` },
-      ];
+      const estPhoto = cle.startsWith(`${BUCKET_PHOTOS}/`);
+      const clePiece = cle.startsWith(`${BUCKET}/reservations/`) ? cle : `${BUCKET}/reservations/${nomFichier}`;
+      const cibles = estPhoto
+        ? [{ bucket: BUCKET_PHOTOS, dossier: BUCKET_PHOTOS, cle }]
+        : [
+            { bucket: BUCKET, dossier: `${BUCKET}/reservations`, cle: clePiece },
+            { bucket: BUCKET, dossier: BUCKET, cle: `${BUCKET}/${nomFichier}` },
+          ];
 
-      /* Appel brut plutôt que storage.remove() : Supabase répond 400 si un
-         DELETE arrive avec un Content-Type JSON mais sans corps. On contrôle
-         donc les en-têtes, et on ne considère la suppression acquise que si
-         le stockage a réellement confirmé. */
-      const racine = Deno.env.get("SUPABASE_URL") || "";
-      const entetes = {
-        apikey: Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "",
-        Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || ""}`,
-      };
       let supprime = false;
-      for (const { bucket, cle: chemin } of cibles) {
-        const r = await fetch(`${racine}/storage/v1/object/${bucket}/${chemin}`, {
-          method: "DELETE",
-          headers: entetes,
-        });
-        if (r.ok || r.status === 404) supprime = true;
+      for (const { bucket, dossier, cle: chemin } of cibles) {
+        const { data: objets, error: erreurListe } = await client.storage
+          .from(bucket)
+          .list(dossier, { search: nomFichier, limit: 1000 });
+        if (erreurListe) throw new Error(`Impossible de rechercher le fichier dans ${bucket} : ${erreurListe.message}`);
+        if (!objets?.some((objet) => objet.name === nomFichier)) continue;
+
+        const { error: erreurSuppression } = await client.storage.from(bucket).remove([chemin]);
+        if (erreurSuppression) throw new Error(`Impossible de supprimer le fichier de ${bucket} : ${erreurSuppression.message}`);
+
+        const { data: restants, error: erreurVerification } = await client.storage
+          .from(bucket)
+          .list(dossier, { search: nomFichier, limit: 1000 });
+        if (erreurVerification) throw new Error(`Impossible de vérifier la suppression dans ${bucket} : ${erreurVerification.message}`);
+        if (restants?.some((objet) => objet.name === nomFichier)) {
+          throw new Error(`Le fichier ${nomFichier} est toujours présent dans ${bucket}.`);
+        }
+        supprime = true;
+        break;
       }
+      /* Suppression idempotente : une pièce déjà absente peut encore avoir
+         une ligne de métadonnées, que l'administration doit pouvoir retirer. */
       return json({ ok: true, supprime });
     }
 
