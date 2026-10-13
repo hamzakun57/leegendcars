@@ -795,9 +795,7 @@
   /* Utilitaires                                                        */
   /* ------------------------------------------------------------------ */
   function estDate(v) {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(String(v || ""))) return false;
-    const d = new Date(v + "T00:00:00");
-    return !isNaN(d) && d.toISOString().slice(0, 10) === v;
+    return !!window.LCDateUtils && window.LCDateUtils.isIsoDate(v);
   }
 
   const normaliser = (s) =>
@@ -863,8 +861,8 @@
       v = String(v).trim();
       if (cle.endsWith("_date") || cle === "birthdate") {
         if (v) {
-          v = v.slice(0, 10);
-          if (!estDate(v)) throw new Error("Une date client est invalide. Choisissez-la avec le calendrier.");
+          v = window.LCDateUtils?.normalizeIsoDate(v) || "";
+          if (!v) throw new Error("Une date client est invalide. Choisissez-la avec le calendrier.");
         }
       }
       out[cle] = v.slice(0, 200);

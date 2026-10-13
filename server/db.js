@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 
+import "../shared/date-utils.js";
 import { many, one, query, tx } from "./pg.js";
 
 /* Toutes les fonctions qui touchent la base sont asynchrones : PostgreSQL est
@@ -11,13 +12,7 @@ export const now = () => new Date().toISOString();
 /* Toute date stockée passe par ici : format AAAA-MM-JJ *et* existence réelle
    dans le calendrier (2026-02-30 est refusé). Retourne la date normalisée, ou
    une chaîne vide si la valeur est inexploitable. */
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-const isoOrEmpty = (v) => {
-  const s = String(v ?? "").trim().slice(0, 10);
-  if (!ISO_DATE.test(s)) return "";
-  const d = new Date(s + "T00:00:00");
-  return !isNaN(d) && d.toISOString().slice(0, 10) === s ? s : "";
-};
+const isoOrEmpty = (v) => globalThis.LCDateUtils.normalizeIsoDate(v);
 /* Les champs dont le nom se termine par « date » (ou « birthdate »). */
 const DATE_FIELD = /(?:_date|birthdate)$/;
 

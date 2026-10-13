@@ -73,13 +73,14 @@ let cookieServeur = "";
 }
 
 /* ---------- session côté navigateur simulé ---------- */
+process.env.TZ = "Pacific/Auckland";
 const dom = new JSDOM("<html></html>", { url: "https://leegendcars.netlify.app/admin", runScripts: "outside-only" });
 const w = dom.window;
 w.fetch = globalThis.fetch;
 w.console = console;
 /* JSDOM ne sait pas naviguer et fournit déjà un localStorage : on n'y touche
    pas, le test s'en sert comme un vrai navigateur. */
-for (const f of ["vendor/supabase.js", "server/public/admin-config.js", "server/public/admin-api.js"]) {
+for (const f of ["vendor/supabase.js", "server/public/admin-config.js", "shared/date-utils.js", "server/public/admin-api.js"]) {
   w.eval(readFileSync(f, "utf8"));
 }
 check("adaptateur présent", !!w.LCAdmin);
@@ -142,6 +143,15 @@ try {
         ["birthdate", "licence_date", "cin_date", "passport_date", "entry_date"]
           .every((field, index) => clientMisAJour[field] === ["1991-10-17", "2013-11-18", "2019-12-19", "2021-01-20", "2025-02-21"][index]));
   }
+  let refusDateInvalide = "";
+  try {
+    await w.eval(
+      `window.LCAdmin.api("/api/admin/clients", { method: "POST", body: { last_name: "DateInvalide", birthdate: "2023-02-29" } })`,
+    );
+  } catch (e) {
+    refusDateInvalide = e.message;
+  }
+  check("date réellement impossible refusée", /date client est invalide/i.test(refusDateInvalide), refusDateInvalide);
   let refusMotDePasseActuel = "";
   try {
     await w.eval(`window.LCAdmin.api("/api/admin/password", { method: "POST", body: { current: "mot-de-passe-incorrect", next: "nouveau-test-123" } })`);

@@ -1525,8 +1525,7 @@
   ];
   const typeLabel = (t) => (CLIENT_TYPES.find((x) => x[0] === t) || CLIENT_TYPES[0])[1];
   const dateClientInput = (value) => {
-    const date = String(value || "").slice(0, 10);
-    return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "";
+    return window.LCDateUtils?.normalizeIsoDate(value) || "";
   };
   const dateClientAffichage = (value) => {
     const date = dateClientInput(value);
@@ -1736,7 +1735,7 @@
         ["Date de délivrance du passeport", payload.passport_date],
         ["Date d'entrée au Maroc", payload.entry_date],
       ];
-      const dateInvalide = dates.find(([label, value]) => value && !/^\d{4}-\d{2}-\d{2}$/.test(value));
+      const dateInvalide = dates.find(([label, value]) => value && !window.LCDateUtils?.isIsoDate(value));
       if (dateInvalide) {
         flash(`${dateInvalide[0]} invalide. Choisissez une date dans le calendrier.`, "err");
         return;
