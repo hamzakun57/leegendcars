@@ -89,12 +89,45 @@ check("mode « supabase »", w.LCAdmin?.mode === "supabase", w.LCAdmin?.mode);
    test échoue avant la création du véhicule de travail. */
 let voitureCreee = null;
 let nomPieceTest = "";
+let clientTestId = null;
 
 try {
   /* Connexion : elle seule passe par l'adaptateur (le serveur a son ancien
      mécanisme, volontairement conservé). */
   const connexion = await w.eval(`window.LCAdmin.api("/api/admin/login", { method: "POST", body: { email: ${JSON.stringify(EMAIL)}, password: ${JSON.stringify(PASS)} } })`);
   check("connexion administrateur", connexion && connexion.ok === true);
+  const datesClientTest = {
+    client_type: "particulier",
+    last_name: `Dates${Date.now()}`,
+    first_name: "Test",
+    birthdate: "1990-05-12",
+    licence_date: "2012-06-13",
+    cin_date: "2018-07-14",
+    passport_date: "2020-08-15",
+    entry_date: "2024-09-16",
+  };
+  const creationClient = await w.eval(
+    `window.LCAdmin.api("/api/admin/clients", { method: "POST", body: ${JSON.stringify(datesClientTest)} })`,
+  );
+  clientTestId = creationClient?.client?.id || null;
+  check("création client avec les dates saisies", !!clientTestId);
+  if (clientTestId) {
+    const datesRelues = await w.eval(`window.LCAdmin.api("/api/admin/clients?q=${encodeURIComponent(datesClientTest.last_name)}")`);
+    const clientRelu = datesRelues.clients.find((client) => client.id === clientTestId);
+    check("toutes les dates client sont conservées",
+      !!clientRelu &&
+        ["birthdate", "licence_date", "cin_date", "passport_date", "entry_date"]
+          .every((field) => clientRelu[field] === datesClientTest[field]));
+    await w.eval(
+      `window.LCAdmin.api("/api/admin/clients/${clientTestId}", { method: "PATCH", body: { birthdate: "1991-10-17", licence_date: "2013-11-18", cin_date: "2019-12-19", passport_date: "2021-01-20", entry_date: "2025-02-21" } })`,
+    );
+    const updatedClient = await w.eval(`window.LCAdmin.api("/api/admin/clients?q=${encodeURIComponent(datesClientTest.last_name)}")`);
+    const clientMisAJour = updatedClient.clients.find((client) => client.id === clientTestId);
+    check("modification des dates client conservée",
+      !!clientMisAJour &&
+        ["birthdate", "licence_date", "cin_date", "passport_date", "entry_date"]
+          .every((field, index) => clientMisAJour[field] === ["1991-10-17", "2013-11-18", "2019-12-19", "2021-01-20", "2025-02-21"][index]));
+  }
   let refusMotDePasseActuel = "";
   try {
     await w.eval(`window.LCAdmin.api("/api/admin/password", { method: "POST", body: { current: "mot-de-passe-incorrect", next: "nouveau-test-123" } })`);
@@ -298,6 +331,12 @@ try {
      milieu laisserait sinon une voiture « Saisie <date> » dans la base de
      l'agence, et les suites suivantes échoueraient sur un parc non vide. */
   const jeton = { apikey: process.env.SUPABASE_SERVICE_ROLE_KEY, Authorization: "Bearer " + process.env.SUPABASE_SERVICE_ROLE_KEY, "Content-Type": "application/json" };
+  if (clientTestId) {
+    await w.eval(`window.LCAdmin.api("/api/admin/clients/${clientTestId}", { method: "DELETE" })`).catch(() => {});
+    if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      await fetch(`${process.env.SUPABASE_URL}/rest/v1/clients?id=eq.${clientTestId}`, { method: "DELETE", headers: jeton }).catch(() => {});
+    }
+  }
   if (nomPieceTest) {
     await fetch(
       `${process.env.SUPABASE_URL}/storage/v1/object/uploads/uploads/reservations/${encodeURIComponent(nomPieceTest)}`,

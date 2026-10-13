@@ -727,7 +727,12 @@ function cleanClient(input) {
     let v = input[key];
     if (v === null || v === undefined) v = "";
     v = String(v).trim();
-    if (key.endsWith("_date") || key === "birthdate") v = isoOrEmpty(v);
+    if (key.endsWith("_date") || key === "birthdate") {
+      if (v) {
+        v = isoOrEmpty(v);
+        if (!v) throw new Error("Une date client est invalide. Choisissez-la avec le calendrier.");
+      }
+    }
     out[key] = v.slice(0, 200);
   }
   if ("client_type" in out && !CLIENT_TYPES.includes(out.client_type)) out.client_type = "particulier";
