@@ -1524,6 +1524,55 @@
     ["entreprise", "Entreprise"],
   ];
   const typeLabel = (t) => (CLIENT_TYPES.find((x) => x[0] === t) || CLIENT_TYPES[0])[1];
+  const dateClientInput = (value) => {
+    const date = String(value || "").slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : "";
+  };
+  const dateClientAffichage = (value) => {
+    const date = dateClientInput(value);
+    if (!date) return "—";
+    const [annee, mois, jour] = date.split("-").map(Number);
+    const d = new Date(annee, mois - 1, jour);
+    return d.getFullYear() === annee && d.getMonth() === mois - 1 && d.getDate() === jour
+      ? d.toLocaleDateString("fr-FR")
+      : "—";
+  };
+  const detailsClient = (client) => {
+    const lignes = [
+      ["Type", typeLabel(client.client_type)],
+      ["Nom", client.last_name],
+      ["Prénom", client.first_name],
+      ["Date de naissance", dateClientAffichage(client.birthdate)],
+      ["Nationalité", client.nationality],
+      ["Téléphone", client.phone],
+      ["E-mail", client.email],
+      ["Adresse", client.address],
+      ["N° du permis", client.licence_number],
+      ["Délivré le", dateClientAffichage(client.licence_date)],
+      ["N° CIN", client.cin],
+      ["Délivrée le", dateClientAffichage(client.cin_date)],
+      ["N° du passeport", client.passport],
+      ["Délivré le", dateClientAffichage(client.passport_date)],
+      ["N° d'entrée au Maroc", client.entry_number],
+      ["Date d'entrée", dateClientAffichage(client.entry_date)],
+      ["Notes", client.notes],
+    ];
+    openSheet(
+      client.full_name || client.last_name,
+      "Détails de la fiche client",
+      `<div class="panel">
+        <div class="grid2">
+          ${lignes.map(([label, value]) => `<div><div class="faint">${esc(label)}</div><b>${value ? esc(value) : "—"}</b></div>`).join("")}
+        </div>
+        <div class="row" style="margin-top:16px">
+          <button type="button" class="primary" id="c-detail-edit">Modifier la fiche</button>
+          <button type="button" class="ghost" id="c-detail-close">Fermer</button>
+        </div>
+      </div>`
+    );
+    $("#c-detail-edit").addEventListener("click", () => clientForm(client));
+    $("#c-detail-close").addEventListener("click", closeSheet);
+  };
 
   let clients = [];
 
@@ -1542,10 +1591,11 @@
           <td><span class="tag">${esc(typeLabel(c.client_type))}</span></td>
           <td>${dl(c.phone)}</td>
           <td>${dl(c.email)}</td>
-          <td>${dl(c.licence_number)}${c.licence_date ? `<div class="faint">${esc(dt(c.licence_date))}</div>` : ""}</td>
+          <td>${dl(c.licence_number)}${c.licence_date ? `<div class="faint">${esc(dateClientAffichage(c.licence_date))}</div>` : ""}</td>
           <td>${dl(c.cin)}</td>
           <td>${dl(c.nationality)}</td>
           <td><div class="row" style="justify-content:flex-end;gap:6px">
+            <button data-cdetail="${c.id}">Détails</button>
             <button data-cedit="${c.id}">Modifier</button>
             <button class="danger" data-cdel="${c.id}" data-cname="${esc(c.full_name || c.last_name)}">Supprimer</button>
           </div></td>
@@ -1553,6 +1603,9 @@
       )
       .join("");
 
+    $$("[data-cdetail]").forEach((b) =>
+      b.addEventListener("click", () => detailsClient(clients.find((c) => c.id === Number(b.dataset.cdetail))))
+    );
     $$("[data-cedit]").forEach((b) =>
       b.addEventListener("click", () => clientForm(clients.find((c) => c.id === Number(b.dataset.cedit))))
     );
@@ -1601,7 +1654,7 @@
       <div class="grid3">
         ${field("Nom *", "c-ln", c.last_name, "text", "Ben ayadech")}
         ${field("Prénom", "c-fn", c.first_name, "text", "Badr")}
-        ${field("Date de naissance", "c-bd", c.birthdate, "date")}
+        ${field("Date de naissance", "c-bd", dateClientInput(c.birthdate), "date")}
         ${field("Nationalité", "c-nat", c.nationality, "text", "Marocaine")}
       </div>
 
@@ -1616,25 +1669,25 @@
       <label>Permis de conduire</label>
       <div class="grid3">
         ${field("Num permis", "c-lic", c.licence_number)}
-        ${field("Date livraison permis", "c-licd", c.licence_date, "date")}
+        ${field("Date de délivrance", "c-licd", dateClientInput(c.licence_date), "date")}
       </div>
 
       <label>CIN</label>
       <div class="grid3">
         ${field("Num CIN", "c-cin", c.cin)}
-        ${field("Date", "c-cind", c.cin_date, "date")}
+        ${field("Date de délivrance", "c-cind", dateClientInput(c.cin_date), "date")}
       </div>
 
       <label>Passeport</label>
       <div class="grid3">
         ${field("Num passeport", "c-pp", c.passport)}
-        ${field("Date", "c-ppd", c.passport_date, "date")}
+        ${field("Date de délivrance", "c-ppd", dateClientInput(c.passport_date), "date")}
       </div>
 
       <label>Numéro d'entrée au Maroc</label>
       <div class="grid3">
         ${field("Num d'entrée", "c-entry", c.entry_number)}
-        ${field("Date", "c-entryd", c.entry_date, "date")}
+        ${field("Date d'entrée", "c-entryd", dateClientInput(c.entry_date), "date")}
       </div>
 
       <label>Notes</label>
@@ -1674,6 +1727,18 @@
       if (!payload.last_name) {
         flash("Le nom est obligatoire.", "err");
         $("#c-ln").focus();
+        return;
+      }
+      const dates = [
+        ["Date de naissance", payload.birthdate],
+        ["Date de délivrance du permis", payload.licence_date],
+        ["Date de délivrance de la CIN", payload.cin_date],
+        ["Date de délivrance du passeport", payload.passport_date],
+        ["Date d'entrée au Maroc", payload.entry_date],
+      ];
+      const dateInvalide = dates.find(([label, value]) => value && !/^\d{4}-\d{2}-\d{2}$/.test(value));
+      if (dateInvalide) {
+        flash(`${dateInvalide[0]} invalide. Choisissez une date dans le calendrier.`, "err");
         return;
       }
       try {

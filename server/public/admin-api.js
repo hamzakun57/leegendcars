@@ -854,7 +854,12 @@
       let v = entree[cle];
       if (v === null || v === undefined) v = "";
       v = String(v).trim();
-      if (cle.endsWith("_date") || cle === "birthdate") v = estDate(v) ? v : "";
+      if (cle.endsWith("_date") || cle === "birthdate") {
+        if (v) {
+          v = v.slice(0, 10);
+          if (!estDate(v)) throw new Error("Une date client est invalide. Choisissez-la avec le calendrier.");
+        }
+      }
       out[cle] = v.slice(0, 200);
     }
     if (out.client_type && ["particulier", "professionnel", "entreprise"].indexOf(out.client_type) < 0) {
