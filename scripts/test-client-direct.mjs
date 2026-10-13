@@ -47,19 +47,28 @@ class IntersectionObserver {
 }
 w.IntersectionObserver = IntersectionObserver;
 
-/* Un véhicule de travail, pour que le scénario ait de la matière. */
+/* Véhicules de travail pour vérifier aussi le tri public par ordre d'affichage. */
 const VEHICULE = "essai-client-direct";
-await admin(`vehicles?slug=eq.${VEHICULE}`, { method: "DELETE" });
-await admin("vehicles", {
-  method: "POST",
-  headers: { Prefer: "return=minimal" },
-  body: JSON.stringify({
-    slug: VEHICULE, name: "Essai Direct", tagline: "Automatique", transmission: "Automatique",
-    fuel: "Essence", doors: 5, seats: 5, price_from: 500, deposit: 5000, approx: 50,
-    tiers: [{ days: 7, price: 400 }], gallery: "[]", description: "[]", ideal_for: "[]",
-    active: 1, en_service: 1, sort_order: 0, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-  }),
-});
+const VEHICULE_ORDRE = ["essai-client-direct-ordre-a", "essai-client-direct-ordre-b", "essai-client-direct-ordre-c"];
+const maintenant = new Date().toISOString();
+for (const slug of [VEHICULE, ...VEHICULE_ORDRE]) await admin(`vehicles?slug=eq.${slug}`, { method: "DELETE" });
+for (const [slug, name, sort_order] of [
+  [VEHICULE, "Essai Direct", -100],
+  [VEHICULE_ORDRE[0], "Essai Ordre A", -102],
+  [VEHICULE_ORDRE[1], "Essai Ordre B", -101],
+  [VEHICULE_ORDRE[2], "Essai Ordre C", -99],
+]) {
+  await admin("vehicles", {
+    method: "POST",
+    headers: { Prefer: "return=minimal" },
+    body: JSON.stringify({
+      slug, name, tagline: "Automatique", transmission: "Automatique",
+      fuel: "Essence", doors: 5, seats: 5, price_from: 500, deposit: 5000, approx: 50,
+      tiers: [{ days: 7, price: 400 }], gallery: "[]", description: "[]", ideal_for: "[]",
+      active: 1, en_service: 1, sort_order, created_at: maintenant, updated_at: maintenant,
+    }),
+  });
+}
 
 try {
   /* Les fichiers sont lus dans l'ordre EXACT où index.html les charge. La liste
@@ -103,6 +112,11 @@ try {
       try {
         const flotte = await window.LCData.vehicles();
         note("lecture de la flotte", Array.isArray(flotte.vehicles), flotte.vehicles.length + " vehicule(s)");
+        const positionsOrdre = ${JSON.stringify(VEHICULE_ORDRE)}.map((slug) => flotte.vehicles.findIndex((v) => v.slug === slug));
+        note("ordre d'affichage respecte dans la flotte publique",
+          positionsOrdre.every((position) => position >= 0) &&
+            positionsOrdre[0] < positionsOrdre[1] && positionsOrdre[1] < positionsOrdre[2],
+          positionsOrdre.join(" < "));
         /* Le véhicule de travail, et non le premier venu : la base est celle de
            l'agence, elle contient ses véhicules, aux prix que l'agence a
            choisis. Les montants attendus ci-dessous n'ont de sens qu'avec
@@ -168,7 +182,7 @@ try {
 } catch (e) {
   check("erreur de test", false, e.message);
 } finally {
-  await admin(`vehicles?slug=eq.${VEHICULE}`, { method: "DELETE" });
+  for (const slug of [VEHICULE, ...VEHICULE_ORDRE]) await admin(`vehicles?slug=eq.${slug}`, { method: "DELETE" });
   await admin(`reservations?ref=like.LC-*&created_by=eq.`, { method: "DELETE" });
 }
 
