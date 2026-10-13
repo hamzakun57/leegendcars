@@ -107,7 +107,8 @@
         const vehicles = (data || []).map(enVehiculePublic);
         vehicles.sort(
           (a, b) =>
-            a.sort_order - b.sort_order ||
+            (a.sort_order > 0 ? a.sort_order : Number.MAX_SAFE_INTEGER) -
+              (b.sort_order > 0 ? b.sort_order : Number.MAX_SAFE_INTEGER) ||
             String(a.name || "").localeCompare(String(b.name || ""), "fr", { sensitivity: "base" })
         );
         return { vehicles };

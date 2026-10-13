@@ -468,7 +468,14 @@
       if (methode === "GET") {
         const { data, error } = await c.from("vehicles").select("*").order("sort_order").order("name");
         if (error) return surErreur(error);
-        return { vehicles: (data || []).map(enrichirVehicule) };
+        const vehicles = (data || []).map(enrichirVehicule);
+        vehicles.sort(
+          (a, b) =>
+            (Number(a.sort_order) > 0 ? Number(a.sort_order) : Number.MAX_SAFE_INTEGER) -
+              (Number(b.sort_order) > 0 ? Number(b.sort_order) : Number.MAX_SAFE_INTEGER) ||
+            String(a.name || "").localeCompare(String(b.name || ""), "fr", { sensitivity: "base" })
+        );
+        return { vehicles };
       }
       if (methode === "POST") {
         const slug = normaliser(corps.slug || corps.name);

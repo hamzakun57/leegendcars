@@ -53,10 +53,10 @@ const VEHICULE_ORDRE = ["essai-client-direct-ordre-a", "essai-client-direct-ordr
 const maintenant = new Date().toISOString();
 for (const slug of [VEHICULE, ...VEHICULE_ORDRE]) await admin(`vehicles?slug=eq.${slug}`, { method: "DELETE" });
 for (const [slug, name, sort_order] of [
-  [VEHICULE, "Essai Direct", -100],
-  [VEHICULE_ORDRE[0], "Essai Ordre A", -102],
-  [VEHICULE_ORDRE[1], "Essai Ordre B", -101],
-  [VEHICULE_ORDRE[2], "Essai Ordre C", -99],
+  [VEHICULE, "Essai Direct", 0],
+  [VEHICULE_ORDRE[0], "Essai Ordre A", 1],
+  [VEHICULE_ORDRE[1], "Essai Ordre B", 2],
+  [VEHICULE_ORDRE[2], "Essai Ordre C", 3],
 ]) {
   await admin("vehicles", {
     method: "POST",
@@ -113,15 +113,17 @@ try {
         const flotte = await window.LCData.vehicles();
         note("lecture de la flotte", Array.isArray(flotte.vehicles), flotte.vehicles.length + " vehicule(s)");
         const positionsOrdre = ${JSON.stringify(VEHICULE_ORDRE)}.map((slug) => flotte.vehicles.findIndex((v) => v.slug === slug));
+        const positionSansOrdre = flotte.vehicles.findIndex((v) => v.slug === "${VEHICULE}");
         note("ordre d'affichage respecte dans la flotte publique",
           positionsOrdre.every((position) => position >= 0) &&
-            positionsOrdre[0] < positionsOrdre[1] && positionsOrdre[1] < positionsOrdre[2],
-          positionsOrdre.join(" < "));
+            positionsOrdre[0] < positionsOrdre[1] && positionsOrdre[1] < positionsOrdre[2] &&
+            positionsOrdre[2] < positionSansOrdre,
+          [...positionsOrdre, positionSansOrdre].join(" < "));
         const rangsOrdre = ${JSON.stringify(VEHICULE_ORDRE)}.map(
           (slug) => flotte.vehicles.find((v) => v.slug === slug)?.sort_order
         );
         note("ordre numerique expose et croissant",
-          rangsOrdre[0] === -102 && rangsOrdre[1] === -101 && rangsOrdre[2] === -99,
+          rangsOrdre[0] === 1 && rangsOrdre[1] === 2 && rangsOrdre[2] === 3,
           rangsOrdre.join(" < "));
         /* Le véhicule de travail, et non le premier venu : la base est celle de
            l'agence, elle contient ses véhicules, aux prix que l'agence a

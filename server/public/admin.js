@@ -1984,7 +1984,8 @@
         </select></div>
         <div><label>Estimation (€)</label><input id="f-approx" type="number" value="${v.approx}"></div>
         <div><label>Badge</label><input id="f-badge" value="${esc(v.badge || "")}"></div>
-        <div><label>Ordre d'affichage</label><input id="f-sort" type="number" value="${v.sort_order || 0}"></div>
+        <div><label>Ordre d'affichage</label><input id="f-sort" type="number" min="0" value="${v.sort_order || 0}">
+          <div class="faint">1 = premier, puis ordre croissant · 0 = à la fin</div></div>
       </div>
 
       <label>Texte</label>
