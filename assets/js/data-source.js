@@ -99,6 +99,8 @@
       .from("vehicles")
       .select("*")
       .eq("active", 1)
+      .order("sort_order", { ascending: true })
+      .order("name", { ascending: true })
       .then(({ data, error }) => {
         if (error) throw new Error(message(error));
         return { vehicles: (data || []).map(enVehiculePublic) };
