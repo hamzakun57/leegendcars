@@ -79,6 +79,7 @@
     priceFrom: v.price_from || 0,
     deposit: v.deposit || 0,
     approx: v.approx || 0,
+    sort_order: Number(v.sort_order) || 0,
     badge: v.badge || "",
     accent: v.accent || "",
     gallery: liste(v.gallery),
@@ -103,7 +104,13 @@
       .order("name", { ascending: true })
       .then(({ data, error }) => {
         if (error) throw new Error(message(error));
-        return { vehicles: (data || []).map(enVehiculePublic) };
+        const vehicles = (data || []).map(enVehiculePublic);
+        vehicles.sort(
+          (a, b) =>
+            a.sort_order - b.sort_order ||
+            String(a.name || "").localeCompare(String(b.name || ""), "fr", { sensitivity: "base" })
+        );
+        return { vehicles };
       });
   }
 

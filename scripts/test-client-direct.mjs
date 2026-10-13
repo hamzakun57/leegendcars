@@ -117,6 +117,12 @@ try {
           positionsOrdre.every((position) => position >= 0) &&
             positionsOrdre[0] < positionsOrdre[1] && positionsOrdre[1] < positionsOrdre[2],
           positionsOrdre.join(" < "));
+        const rangsOrdre = ${JSON.stringify(VEHICULE_ORDRE)}.map(
+          (slug) => flotte.vehicles.find((v) => v.slug === slug)?.sort_order
+        );
+        note("ordre numerique expose et croissant",
+          rangsOrdre[0] === -102 && rangsOrdre[1] === -101 && rangsOrdre[2] === -99,
+          rangsOrdre.join(" < "));
         /* Le véhicule de travail, et non le premier venu : la base est celle de
            l'agence, elle contient ses véhicules, aux prix que l'agence a
            choisis. Les montants attendus ci-dessous n'ont de sens qu'avec
