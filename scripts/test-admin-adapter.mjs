@@ -96,6 +96,20 @@ try {
      mécanisme, volontairement conservé). */
   const connexion = await w.eval(`window.LCAdmin.api("/api/admin/login", { method: "POST", body: { email: ${JSON.stringify(EMAIL)}, password: ${JSON.stringify(PASS)} } })`);
   check("connexion administrateur", connexion && connexion.ok === true);
+  const [flotteServeur, flotteSupabase] = await Promise.all([
+    fetch(`${B}/api/admin/vehicles`, { headers: { cookie: cookieServeur } }).then((r) => r.json()),
+    w.eval(`window.LCAdmin.api("/api/admin/vehicles")`),
+  ]);
+  const ordreValide = (liste) => liste.every((vehicule, index) => {
+    if (index === 0) return true;
+    const precedent = liste[index - 1];
+    const rang = (v) => Number(v.sort_order) > 0 ? Number(v.sort_order) : Number.MAX_SAFE_INTEGER;
+    return rang(precedent) < rang(vehicule) ||
+      (rang(precedent) === rang(vehicule) &&
+        String(precedent.name || "").localeCompare(String(vehicule.name || ""), "fr", { sensitivity: "base" }) <= 0);
+  });
+  check("tri flotte serveur : rangs positifs puis 0", ordreValide(flotteServeur.vehicles));
+  check("tri flotte Supabase : rangs positifs puis 0", ordreValide(flotteSupabase.vehicles));
   const datesClientTest = {
     client_type: "particulier",
     last_name: `Dates${Date.now()}`,

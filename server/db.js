@@ -93,8 +93,8 @@ export function rowToVehicle(row) {
 
 export async function listVehicles({ includeInactive = true } = {}) {
   const sql = includeInactive
-    ? "SELECT * FROM vehicles ORDER BY sort_order, name"
-    : "SELECT * FROM vehicles WHERE active = 1 ORDER BY sort_order, name";
+    ? "SELECT * FROM vehicles ORDER BY CASE WHEN sort_order > 0 THEN 0 ELSE 1 END, CASE WHEN sort_order > 0 THEN sort_order ELSE 0 END, lower(name)"
+    : "SELECT * FROM vehicles WHERE active = 1 ORDER BY CASE WHEN sort_order > 0 THEN 0 ELSE 1 END, CASE WHEN sort_order > 0 THEN sort_order ELSE 0 END, lower(name)";
   return (await many(sql)).map(rowToVehicle);
 }
 
