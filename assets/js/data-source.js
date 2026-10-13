@@ -178,11 +178,11 @@
       if (!p.lastName) manquant.push("lastName");
       if (!/^\+?[\d\s().-]{6,25}$/.test(p.phone || "")) manquant.push("phone");
       if (!p.licenceNumber) manquant.push("licenceNumber");
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(p.licenceDate || "")) manquant.push("licenceDate");
+      if (!window.LCDateUtils?.isIsoDate(p.licenceDate)) manquant.push("licenceDate");
       if (!p.pickup) manquant.push("pickup");
       if (!p.ret) manquant.push("ret");
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(p.pickupDate || "")) manquant.push("pickupDate");
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(p.returnDate || "")) manquant.push("returnDate");
+      if (!window.LCDateUtils?.isIsoDate(p.pickupDate)) manquant.push("pickupDate");
+      if (!window.LCDateUtils?.isIsoDate(p.returnDate)) manquant.push("returnDate");
       if (manquant.length) return { ok: false, error: "Champs invalides", fields: manquant };
 
       return pricing({

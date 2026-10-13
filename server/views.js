@@ -269,6 +269,7 @@ const adminShell = () => `<!doctype html>
 </div>
 <script src="/admin-assets/admin-config.js"></script>
 <script src="/vendor/supabase.js"></script>
+<script src="/shared/date-utils.js"></script>
 <script src="/admin-assets/admin-api.js"></script>
 <script src="/admin-assets/signature-pad.js"></script>
 <script src="/admin-assets/admin.js"></script>

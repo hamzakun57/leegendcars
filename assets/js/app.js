@@ -403,6 +403,17 @@
         const licenceDate = req("licenceDate", "Date du permis requise");
         const passport = (get("passport").value || "").trim();
 
+        for (const [name, value, label] of [
+          ["licenceDate", licenceDate, "Date du permis"],
+          ["pickupDate", pickupDate, "Date de prise en charge"],
+          ["returnDate", returnDate, "Date de retour"],
+        ]) {
+          if (value && !window.LCDateUtils?.isIsoDate(value)) {
+            setFieldError(get(name), `${label} invalide.`);
+            ok = false;
+          }
+        }
+
         if (licenceDate && licenceDate > pickupDate) {
           setFieldError(get("licenceDate"), "La date du permis doit être avant la prise en charge.");
           ok = false;
